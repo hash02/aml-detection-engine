@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXUS-RISK · Real Chain Intelligence v10</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<style>
+:root{--bg:#08090d;--surface:#0f111a;--border:#1c1f2e;--accent:#4f6ef7;--purple:#7c3aed;--red:#ef4444;--orange:#f97316;--yellow:#eab308;--green:#22c55e;--cyan:#06b6d4;--text:#e2e8f0;--muted:#64748b;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;font-size:13px;}
+header{padding:22px 28px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+header h1{font-size:19px;font-weight:700;letter-spacing:-.4px;}
+header h1 em{color:var(--accent);font-style:normal;}
+.sub{font-size:11px;color:var(--muted);margin-top:3px;}
+.hr{text-align:right;font-size:11px;color:var(--muted);line-height:1.8;}
+.page{padding:20px 28px 40px;}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px;}
+.g2{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:16px;}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:16px;}
+.g2x{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:17px;}
+.ct{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);font-weight:600;margin-bottom:13px;}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:17px;text-align:center;}
+.sv{font-size:28px;font-weight:700;line-height:1.1;margin:4px 0;}
+.sl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;}
+.sd{font-size:11px;margin-top:5px;}
+.cw{position:relative;width:100%;}
+.h260{height:260px;} .h240{height:240px;} .h200{height:200px;} .h180{height:180px;} .h300{height:300px;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{padding:7px 10px;text-align:left;color:var(--muted);font-weight:500;border-bottom:1px solid var(--border);}
+td{padding:8px 10px;border-bottom:1px solid #111520;vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(79,110,247,.04);}
+.b{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.5px;}
+.b-red{background:rgba(239,68,68,.15);color:#f87171;}
+.b-orange{background:rgba(249,115,22,.15);color:#fb923c;}
+.b-yellow{background:rgba(234,179,8,.15);color:#facc15;}
+.b-green{background:rgba(34,197,94,.15);color:#4ade80;}
+.b-blue{background:rgba(79,110,247,.15);color:#818cf8;}
+.b-purple{background:rgba(124,58,237,.15);color:#a78bfa;}
+.b-cyan{background:rgba(6,182,212,.15);color:#22d3ee;}
+.b-gray{background:rgba(100,116,139,.15);color:#94a3b8;}
+.bar-wrap{background:#1a1d2e;border-radius:3px;overflow:hidden;height:6px;flex:1;}
+.bar-fill{height:100%;border-radius:3px;transition:width .3s;}
+.row-inline{display:flex;align-items:center;gap:8px;}
+.tag{display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:.4px;}
+.grp-badge{display:inline-block;padding:2px 8px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;}
+.grp1{background:rgba(239,68,68,.13);color:#f87171;}
+.grp2{background:rgba(249,115,22,.13);color:#fb923c;}
+.grp3{background:rgba(234,179,8,.13);color:#fbbf24;}
+.grp4{background:rgba(34,197,94,.13);color:#4ade80;}
+.grp5{background:rgba(6,182,212,.13);color:#22d3ee;}
+.ctrl-row td{opacity:.65;}
+.evo-card{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:14px;position:relative;overflow:hidden;}
+.evo-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.evo-v7::before{background:linear-gradient(90deg,#4f6ef7,#7c3aed);}
+.evo-v8::before{background:linear-gradient(90deg,#7c3aed,#f97316);}
+.evo-v9::before{background:linear-gradient(90deg,#f97316,#ef4444);}
+.evo-v10::before{background:linear-gradient(90deg,#ef4444,#22c55e);}
+.evo-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:700;}
+.evo-val{font-size:20px;font-weight:700;margin:4px 0 2px;}
+.evo-delta{font-size:11px;}
+.rule-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:5px;font-size:10px;font-weight:600;background:rgba(255,255,255,.04);border:1px solid var(--border);margin:3px 2px;}
+.rule-chip .dot{width:6px;height:6px;border-radius:50%;}
+.section-divider{margin:20px 0 14px;font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);font-weight:700;display:flex;align-items:center;gap:8px;}
+.section-divider::after{content:'';flex:1;height:1px;background:var(--border);}
+footer{padding:16px 28px;border-top:1px solid var(--border);color:var(--muted);font-size:11px;display:flex;justify-content:space-between;}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>NEXUS-<em>RISK</em> · Real Chain Intelligence</h1>
+    <div class="sub">813 on-chain transactions · 9 case studies · 22 detection rules · v7→v11 evolution</div>
+  </div>
+  <div class="hr">
+    Engine: <strong style="color:var(--accent)">v11</strong><br>
+    Rules: <strong>22</strong> active<br>
+    Built by <strong>Bionic Banker</strong>
+  </div>
+</header>
+
+<div class="page">
+
+<!-- ── TOP STATS ── -->
+<div class="g4">
+  <div class="stat">
+    <div class="sl">Detection Rate</div>
+    <div class="sv" style="color:var(--green)">94.9%</div>
+    <div class="sd">682 / 719 bad-actor txns flagged</div>
+  </div>
+  <div class="stat">
+    <div class="sl">False Positive Rate</div>
+    <div class="sv" style="color:var(--yellow)">20.2%</div>
+    <div class="sd">19 / 94 control txns misclassified</div>
+  </div>
+  <div class="stat">
+    <div class="sl">Total Transactions</div>
+    <div class="sv" style="color:var(--accent)">813</div>
+    <div class="sd">Real ETH mainnet + forensic synth</div>
+  </div>
+  <div class="stat">
+    <div class="sl">Active Rules (v11)</div>
+    <div class="sv" style="color:var(--purple)">22</div>
+    <div class="sd">+7 new rules vs v10</div>
+  </div>
+</div>
+
+<!-- ── ENGINE EVOLUTION ── -->
+<div class="section-divider">Engine Evolution</div>
+<div class="g4">
+  <div class="evo-card evo-v7">
+    <div class="evo-label">v7 · baseline</div>
+    <div class="evo-val" style="color:#818cf8">62.8%</div>
+    <div class="evo-delta" style="color:var(--muted)">detection · 14.4% FP</div>
+    <div style="margin-top:8px;font-size:10px;color:var(--muted)">layering · mixer_touch<br>bridge_hop · peel_chain</div>
+  </div>
+  <div class="evo-card evo-v8">
+    <div class="evo-label">v8 · wallet intel</div>
+    <div class="evo-val" style="color:#fb923c">70.0%</div>
+    <div class="evo-delta" style="color:var(--green)">+7.2% detection · +13.5% FP</div>
+    <div style="margin-top:8px;font-size:10px;color:var(--muted)">novel_wallet_dump<br>concentrated_inflow</div>
+  </div>
+  <div class="evo-card evo-v9">
+    <div class="evo-label">v9 · sanctions + speed</div>
+    <div class="evo-val" style="color:#f87171">93.1%</div>
+    <div class="evo-delta" style="color:var(--green)">+23.1% detection · 0% new FP</div>
+    <div style="margin-top:8px;font-size:10px;color:var(--muted)">OFAC_SDN · flash_loan_burst<br>coordinated_burst</div>
+  </div>
+  <div class="evo-card evo-v10">
+    <div class="evo-label">v10 · dormancy</div>
+    <div class="evo-val" style="color:#4ade80">94.9%</div>
+    <div class="evo-delta" style="color:var(--green)">+1.8% · FP ↓ 20.2% · +Wormhole/Nomad</div>
+    <div style="margin-top:8px;font-size:10px;color:var(--muted)">dormant_activation<br>15 rules total</div>
+  </div>
+</div>
+<!-- v11 banner -->
+<div style="background:rgba(6,182,212,.06);border:1px solid rgba(6,182,212,.2);border-radius:9px;padding:14px 20px;margin-bottom:16px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+  <div>
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#22d3ee;font-weight:700;margin-bottom:4px;">v11 · All Remaining Rules Added</div>
+    <div style="font-size:22px;font-weight:700;color:var(--green)">94.9% Detection · 20.2% FP · 22 Rules</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:3px;">Engine ceiling reached on current dataset. Remaining 5.1% miss = structural data gap (Euler needs block timestamps, Ronin non-OFAC intermediaries).</div>
+  </div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;">
+    <span class="rule-chip"><span class="dot" style="background:#22d3ee"></span>wash_cycle</span>
+    <span class="rule-chip"><span class="dot" style="background:#22d3ee"></span>smurfing</span>
+    <span class="rule-chip"><span class="dot" style="background:#22d3ee"></span>exit_rush</span>
+    <span class="rule-chip"><span class="dot" style="background:#22d3ee"></span>rapid_succession</span>
+    <span class="rule-chip"><span class="dot" style="background:#22d3ee"></span>high_risk_country</span>
+    <span class="rule-chip"><span class="dot" style="background:#22d3ee"></span>exchange_avoidance</span>
+    <span class="rule-chip"><span class="dot" style="background:#22d3ee"></span>layering_deep</span>
+  </div>
+</div>
+
+<!-- AI Layer Banner -->
+<div style="background:rgba(124,58,237,.06);border:1px solid rgba(124,58,237,.25);border-radius:9px;padding:14px 20px;margin-bottom:16px;">
+  <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#a78bfa;font-weight:700;margin-bottom:8px;">AI Layer v1 · Graph + Isolation Forest · Live Results</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px;">
+    <div style="background:rgba(0,0,0,.3);border-radius:7px;padding:10px;text-align:center;">
+      <div style="font-size:18px;font-weight:700;color:#4ade80">5.3%</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:2px;">AI Standalone Detection</div>
+      <div style="font-size:10px;color:var(--muted);">Iso Forest alone</div>
+    </div>
+    <div style="background:rgba(0,0,0,.3);border-radius:7px;padding:10px;text-align:center;">
+      <div style="font-size:18px;font-weight:700;color:#a78bfa">21</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:2px;">AI-Only Anomalies</div>
+      <div style="font-size:10px;color:var(--muted);">Rules missed, AI found</div>
+    </div>
+    <div style="background:rgba(0,0,0,.3);border-radius:7px;padding:10px;text-align:center;">
+      <div style="font-size:18px;font-weight:700;color:#22d3ee">13</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:2px;">Graph Features</div>
+      <div style="font-size:10px;color:var(--muted);">Network topology signals</div>
+    </div>
+    <div style="background:rgba(0,0,0,.3);border-radius:7px;padding:10px;text-align:center;">
+      <div style="font-size:18px;font-weight:700;color:#f97316">0.784</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:2px;">Top Feature Corr</div>
+      <div style="font-size:10px;color:var(--muted);">time_burstiness</div>
+    </div>
+  </div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">
+    <strong style="color:#e2e8f0;">Why Isolation Forest beats GNN here:</strong> Unsupervised — no labels needed. Trains on what "normal" looks like, flags deviations. Zero-day immune: never seen the attack pattern before? Doesn't matter.
+    GNN requires ~5,000 labelled graph snapshots + PyTorch Geometric training loop. Isolation Forest runs on <em>this exact dataset</em> today.
+    <strong style="color:#fbbf24;">Real insight:</strong> AI standalone = weak on known fraud (rules dominate). AI shines on <em>unknowns</em> — the 21 AI-only anomalies are candidates no rule ever touched.
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;">
+    <span style="background:rgba(34,197,94,.1);color:#4ade80;padding:3px 9px;border-radius:4px;font-weight:600;">✓ CONFIRMED: 119 (both)</span>
+    <span style="background:rgba(124,58,237,.1);color:#a78bfa;padding:3px 9px;border-radius:4px;font-weight:600;">⬡ AI_ONLY: 21 (novel)</span>
+    <span style="background:rgba(79,110,247,.1);color:#818cf8;padding:3px 9px;border-radius:4px;font-weight:600;">◈ RULES_ONLY: 576 (pattern)</span>
+    <span style="background:rgba(100,116,139,.1);color:#94a3b8;padding:3px 9px;border-radius:4px;font-weight:600;">○ CLEAN: 90</span>
+  </div>
+  <div style="margin-top:10px;padding:8px 12px;background:rgba(0,0,0,.25);border-radius:6px;">
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:6px;">Feature Importance → Anomaly Score Correlation</div>
+    <div style="display:flex;flex-direction:column;gap:4px;">
+      <div style="display:flex;align-items:center;gap:8px;font-size:11px;"><span style="width:160px;color:var(--text);">time_burstiness</span><div style="height:5px;background:linear-gradient(90deg,#a78bfa,#7c3aed);border-radius:2px;width:calc(0.784*200px)"></div><span style="color:var(--muted);">0.784</span></div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:11px;"><span style="width:160px;color:var(--text);">sender_is_passthrough</span><div style="height:5px;background:linear-gradient(90deg,#a78bfa,#7c3aed);border-radius:2px;width:calc(0.702*200px)"></div><span style="color:var(--muted);">0.702</span></div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:11px;"><span style="width:160px;color:var(--text);">amount_concentration</span><div style="height:5px;background:linear-gradient(90deg,#a78bfa,#7c3aed);border-radius:2px;width:calc(0.676*200px)"></div><span style="color:var(--muted);">0.676</span></div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:11px;"><span style="width:160px;color:var(--text);">sender_node_tx_count</span><div style="height:5px;background:linear-gradient(90deg,#a78bfa,#7c3aed);border-radius:2px;width:calc(0.607*200px)"></div><span style="color:var(--muted);">0.607</span></div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:11px;"><span style="width:160px;color:var(--text);">in_degree</span><div style="height:5px;background:linear-gradient(90deg,#a78bfa,#7c3aed);border-radius:2px;width:calc(0.532*200px)"></div><span style="color:var(--muted);">0.532</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── CHARTS ROW 1 ── -->
+<div class="g2">
+  <div class="card">
+    <div class="ct">Detection % by Case Study — All Versions</div>
+    <div class="cw h260"><canvas id="caseChart"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="ct">Precision-Recall Tradeoff</div>
+    <div class="cw h260"><canvas id="tradeoffChart"></canvas></div>
+  </div>
+</div>
+
+<!-- ── CHARTS ROW 2 ── -->
+<div class="g2x">
+  <div class="card">
+    <div class="ct">Rules Arsenal — 15 Detection Capabilities</div>
+    <div class="cw h200"><canvas id="rulesChart"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="ct">Score Distribution by Risk Band</div>
+    <div class="cw h200"><canvas id="scoreDistChart"></canvas></div>
+  </div>
+</div>
+
+<!-- ── CASE STUDY TABLE ── -->
+<div class="section-divider">Case Study Scorecard — 9 Real Incidents</div>
+<div class="card" style="margin-bottom:16px;">
+  <table>
+    <thead>
+      <tr>
+        <th>Case</th>
+        <th>Attack Group</th>
+        <th>v7</th>
+        <th>v8</th>
+        <th>v9</th>
+        <th>v10</th>
+        <th>Txns</th>
+        <th>Avg Score</th>
+        <th>Primary Signals</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Tornado -->
+      <tr>
+        <td><strong>Tornado Cash (4 pools)</strong><br><span style="color:var(--muted);font-size:10px">$~10B+ laundered · OFAC Aug 2022</span></td>
+        <td><span class="grp-badge grp1">Mixer Laundering</span></td>
+        <td>100%</td><td>100%</td><td>100%</td>
+        <td><strong style="color:var(--green)">100%</strong></td>
+        <td>311</td>
+        <td><span style="color:var(--green)">286.3</span></td>
+        <td>
+          <span class="rule-chip"><span class="dot" style="background:#ef4444"></span>OFAC_SDN</span>
+          <span class="rule-chip"><span class="dot" style="background:#7c3aed"></span>mixer_touch</span>
+        </td>
+      </tr>
+      <!-- Lazarus -->
+      <tr>
+        <td><strong>Lazarus / Stake.com</strong><br><span style="color:var(--muted);font-size:10px">$41M stolen · FBI Sep 2023</span></td>
+        <td><span class="grp-badge grp2">State Actor</span></td>
+        <td>24.4%</td><td>47.9%</td><td>100%</td>
+        <td><strong style="color:var(--green)">100%</strong></td>
+        <td>119</td>
+        <td><span style="color:var(--green)">244.4</span></td>
+        <td>
+          <span class="rule-chip"><span class="dot" style="background:#ef4444"></span>OFAC_SDN</span>
+          <span class="rule-chip"><span class="dot" style="background:#f97316"></span>conc_inflow</span>
+        </td>
+      </tr>
+      <!-- Ronin -->
+      <tr>
+        <td><strong>Ronin Bridge Hack</strong><br><span style="color:var(--muted);font-size:10px">$625M stolen · OFAC Apr 2022</span></td>
+        <td><span class="grp-badge grp2">State Actor</span></td>
+        <td>6.1%</td><td>6.1%</td><td>100%</td>
+        <td><strong style="color:var(--green)">84.3%</strong></td>
+        <td>89</td>
+        <td><span style="color:var(--yellow)">156.7</span></td>
+        <td>
+          <span class="rule-chip"><span class="dot" style="background:#ef4444"></span>OFAC_SDN</span>
+          <span class="rule-chip"><span class="dot" style="background:#4f6ef7"></span>large_amount</span>
+        </td>
+      </tr>
+      <!-- Bybit -->
+      <tr>
+        <td><strong>Bybit Hack</strong><br><span style="color:var(--muted);font-size:10px">$1.5B stolen · Lazarus Feb 2025</span></td>
+        <td><span class="grp-badge grp2">State Actor</span></td>
+        <td>0%</td><td>0%</td><td>100%</td>
+        <td><strong style="color:var(--green)">100%</strong></td>
+        <td>1</td>
+        <td><span style="color:var(--green)">200.0</span></td>
+        <td>
+          <span class="rule-chip"><span class="dot" style="background:#ef4444"></span>OFAC_SDN</span>
+        </td>
+      </tr>
+      <!-- Euler -->
+      <tr>
+        <td><strong>Euler Finance Flash Loan</strong><br><span style="color:var(--muted);font-size:10px">$197M · funds returned · no OFAC</span></td>
+        <td><span class="grp-badge grp3">Protocol Exploit</span></td>
+        <td>15.8%</td><td>35.1%</td><td>35.1%</td>
+        <td><strong style="color:var(--yellow)">23.3%</strong></td>
+        <td>30</td>
+        <td><span style="color:var(--muted)">29.7</span></td>
+        <td>
+          <span class="rule-chip"><span class="dot" style="background:#eab308"></span>large_amount</span>
+          <span class="b-gray b" style="font-size:9px">⚠ No OFAC · Gap remains</span>
+        </td>
+      </tr>
+      <!-- Wormhole NEW -->
+      <tr>
+        <td><strong>Wormhole Bridge Exploit ✦</strong><br><span style="color:var(--muted);font-size:10px">$320M · forged guardian sig · Feb 2022</span></td>
+        <td><span class="grp-badge grp5">Bridge Exploit</span></td>
+        <td>—</td><td>—</td><td>—</td>
+        <td><strong style="color:var(--green)">100%</strong></td>
+        <td>10</td>
+        <td><span style="color:var(--green)">56.5</span></td>
+        <td>
+          <span class="rule-chip"><span class="dot" style="background:#f97316"></span>novel_dump</span>
+          <span class="rule-chip"><span class="dot" style="background:#4f6ef7"></span>large_amount</span>
+        </td>
+      </tr>
+      <!-- Nomad NEW -->
+      <tr>
+        <td><strong>Nomad Crowd Looting ✦</strong><br><span style="color:var(--muted);font-size:10px">$190M · 300+ wallets · Aug 2022</span></td>
+        <td><span class="grp-badge grp5">Bridge Exploit</span></td>
+        <td>—</td><td>—</td><td>—</td>
+        <td><strong style="color:var(--green)">100%</strong></td>
+        <td>159</td>
+        <td><span style="color:var(--green)">228.7</span></td>
+        <td>
+          <span class="rule-chip"><span class="dot" style="background:#06b6d4"></span>fan_in</span>
+          <span class="rule-chip"><span class="dot" style="background:#4f6ef7"></span>velocity</span>
+          <span class="rule-chip"><span class="dot" style="background:#f97316"></span>coord_burst</span>
+        </td>
+      </tr>
+      <!-- Controls -->
+      <tr class="ctrl-row">
+        <td><strong>Vitalik Wallet</strong> <span class="b-gray b">CONTROL</span><br><span style="color:var(--muted);font-size:10px">Legitimate large-wallet — FP test</span></td>
+        <td><span class="grp-badge grp4">Control</span></td>
+        <td>0%</td><td>21.2%</td><td>21.2%</td>
+        <td><strong style="color:var(--green)">20.4%</strong></td>
+        <td>54</td>
+        <td>19.9</td>
+        <td>
+          <span class="b-gray b" style="font-size:9px">mixer_withdraw taint · novel_dump on meme tokens</span>
+        </td>
+      </tr>
+      <tr class="ctrl-row">
+        <td><strong>ETH Foundation</strong> <span class="b-gray b">CONTROL</span><br><span style="color:var(--muted);font-size:10px">Institutional non-profit — FP test</span></td>
+        <td><span class="grp-badge grp4">Control</span></td>
+        <td>28.8%</td><td>34.6%</td><td>34.6%</td>
+        <td><strong style="color:var(--green)">20.0%</strong></td>
+        <td>40</td>
+        <td>25.2</td>
+        <td>
+          <span class="b-gray b" style="font-size:9px">large_amount · mixer_withdraw taint propagation</span>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <div style="margin-top:10px;font-size:10px;color:var(--muted);">✦ New in v10 · ⚠ Euler gap: funds returned, never OFAC-sanctioned, hourly Etherscan data (not block-level) prevents flash_loan_burst from firing accurately</div>
+</div>
+
+<!-- ── ATTACK GROUP TAXONOMY ── -->
+<div class="section-divider">Attack Pattern Taxonomy — 5 Groups → 15 Rules</div>
+<div class="g3" style="margin-bottom:16px;">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div class="ct" style="margin-bottom:0">Group 1 · Mixer Laundering</div>
+      <span class="grp-badge grp1">Mixer</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Funds pass through a public mixing service to break the on-chain lineage. Goal: sever traceability between input and output wallets.</div>
+    <div style="font-size:10px;color:var(--text);margin-bottom:6px;"><strong>Cases:</strong> Tornado Cash (all pools)</div>
+    <div style="font-size:10px;color:var(--text);margin-bottom:8px;"><strong>Kill rules:</strong></div>
+    <div>
+      <span class="rule-chip"><span class="dot" style="background:#ef4444"></span>OFAC_SDN</span>
+      <span class="rule-chip"><span class="dot" style="background:#7c3aed"></span>mixer_touch</span>
+      <span class="rule-chip"><span class="dot" style="background:#4f6ef7"></span>velocity</span>
+    </div>
+    <div style="margin-top:10px;font-size:10px;background:rgba(239,68,68,.07);border-radius:5px;padding:7px;color:#fca5a5;">Detection: <strong>100%</strong> across all versions. OFAC + mixer = double kill shot.</div>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div class="ct" style="margin-bottom:0">Group 2 · State Actor Hack</div>
+      <span class="grp-badge grp2">Nation-State</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Nation-state actors (Lazarus/DPRK) drain bridges via key compromise. Funds fan out through 50–100 wallet hops over months before cashout.</div>
+    <div style="font-size:10px;color:var(--text);margin-bottom:6px;"><strong>Cases:</strong> Ronin · Lazarus/Stake · Bybit</div>
+    <div style="font-size:10px;color:var(--text);margin-bottom:8px;"><strong>Kill rules:</strong></div>
+    <div>
+      <span class="rule-chip"><span class="dot" style="background:#ef4444"></span>OFAC_SDN</span>
+      <span class="rule-chip"><span class="dot" style="background:#f97316"></span>novel_dump</span>
+      <span class="rule-chip"><span class="dot" style="background:#f97316"></span>conc_inflow</span>
+    </div>
+    <div style="margin-top:10px;font-size:10px;background:rgba(249,115,22,.07);border-radius:5px;padding:7px;color:#fdba74;">Detection: <strong>v7 near-zero → v9 100%</strong> after OFAC screening added. Single rule closed a 94% gap.</div>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div class="ct" style="margin-bottom:0">Group 3 · Protocol Exploit</div>
+      <span class="grp-badge grp3">Flash Loan</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Smart contract exploit: flash borrow + manipulate oracle + drain + repay, all in a single atomic block (~12 seconds). Returns funds = never OFAC-sanctioned.</div>
+    <div style="font-size:10px;color:var(--text);margin-bottom:6px;"><strong>Cases:</strong> Euler Finance</div>
+    <div style="font-size:10px;color:var(--text);margin-bottom:8px;"><strong>Kill rules (v11 targets):</strong></div>
+    <div>
+      <span class="rule-chip"><span class="dot" style="background:#eab308"></span>flash_loan_burst</span>
+      <span class="rule-chip"><span class="dot" style="background:#4f6ef7"></span>large_amount</span>
+    </div>
+    <div style="margin-top:10px;font-size:10px;background:rgba(234,179,8,.07);border-radius:5px;padding:7px;color:#fde68a;">⚠ Engine gap: needs block-level timestamps (not hourly). Euler = v11 priority.</div>
+  </div>
+</div>
+<div class="g3" style="margin-bottom:16px;">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div class="ct" style="margin-bottom:0">Group 4 · Dormant Revival</div>
+      <span class="grp-badge grp4">Dormant</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Funds stolen years ago sit untouched until investigators lose interest or a new cashout corridor opens. BitFinex: 6 years dormant (2016→2022), then moved $3.6B.</div>
+    <div style="font-size:10px;color:var(--text);margin-bottom:6px;"><strong>Cases:</strong> BitFinex (BTC-native) · Wormhole Oasis (1yr gap)</div>
+    <div style="font-size:10px;color:var(--text);margin-bottom:8px;"><strong>Kill rules (v10 new):</strong></div>
+    <div>
+      <span class="rule-chip"><span class="dot" style="background:#22c55e"></span>dormant_activation</span>
+      <span class="rule-chip"><span class="dot" style="background:#4f6ef7"></span>large_amount</span>
+    </div>
+    <div style="margin-top:10px;font-size:10px;background:rgba(34,197,94,.07);border-radius:5px;padding:7px;color:#86efac;">Rule fires when wallet inactive 365+ days moves &gt;$100k. Score scales with dormancy years (1yr→2x at 5yr).</div>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div class="ct" style="margin-bottom:0">Group 5 · Bridge Exploit</div>
+      <span class="grp-badge grp5">Bridge</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Cross-chain bridge bug exploited to mint synthetic assets backed by nothing, then claim real assets on the other side. Single large event + new wallet + instant fan-out.</div>
+    <div style="font-size:10px;color:var(--text);margin-bottom:6px;"><strong>Cases:</strong> Wormhole ($320M) · Nomad ($190M)</div>
+    <div style="font-size:10px;color:var(--text);margin-bottom:8px;"><strong>Kill rules:</strong></div>
+    <div>
+      <span class="rule-chip"><span class="dot" style="background:#f97316"></span>novel_dump</span>
+      <span class="rule-chip"><span class="dot" style="background:#06b6d4"></span>fan_in</span>
+      <span class="rule-chip"><span class="dot" style="background:#06b6d4"></span>coord_burst</span>
+      <span class="rule-chip"><span class="dot" style="background:#4f6ef7"></span>large_amount</span>
+    </div>
+    <div style="margin-top:10px;font-size:10px;background:rgba(6,182,212,.07);border-radius:5px;padding:7px;color:#67e8f9;">Detection: <strong>100%</strong> in v10. Nomad's 300+ wallets = perfect fan_in + coordinated_burst target.</div>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div class="ct" style="margin-bottom:0">Engine Blind Spots</div>
+      <span class="b-gray b">Known Gaps</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Documented patterns the current rules cannot reliably detect:</div>
+    <div style="font-size:11px;line-height:1.9;">
+      <div>⚠ <strong>Rug pulls</strong> — look identical to legitimate large withdrawals</div>
+      <div>⚠ <strong>NFT wash trading</strong> — no velocity pattern, just circular ownership</div>
+      <div>⚠ <strong>Oracle manipulation</strong> — requires DeFi state context, not just txn data</div>
+      <div>⚠ <strong>Cross-chain hops</strong> — ETH-only engine is blind to Solana/BSC legs</div>
+      <div>⚠ <strong>Insider jobs</strong> — behavioral, not pattern-based</div>
+    </div>
+    <div style="margin-top:10px;font-size:10px;background:rgba(100,116,139,.07);border-radius:5px;padding:7px;color:var(--muted);">Solution: AI layer (GNN + anomaly detection) as v11 target</div>
+  </div>
+</div>
+
+<!-- ── RULE FAMILY MAP ── -->
+<div class="section-divider">15-Rule Arsenal — Capability Map</div>
+<div class="card" style="margin-bottom:16px;">
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;">
+    <div>
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:700;">v6 · Core (4)</div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#818cf8">large_amount</span><br><span style="color:var(--muted);font-size:9px">Threshold breach</span></div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#818cf8">velocity</span><br><span style="color:var(--muted);font-size:9px">Speed in window</span></div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#818cf8">fan_in</span><br><span style="color:var(--muted);font-size:9px">Many→one senders</span></div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#818cf8">structuring</span><br><span style="color:var(--muted);font-size:9px">Just-under pattern</span></div>
+    </div>
+    <div>
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:700;">v7 · Chain-Native (4)</div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#a78bfa">mixer_touch</span><br><span style="color:var(--muted);font-size:9px">Known mixer contact</span></div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#a78bfa">bridge_hop</span><br><span style="color:var(--muted);font-size:9px">Rapid chain-switching</span></div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#a78bfa">peel_chain</span><br><span style="color:var(--muted);font-size:9px">Shrinking hops trail</span></div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#a78bfa">layering</span><br><span style="color:var(--muted);font-size:9px">Cycle detection</span></div>
+    </div>
+    <div>
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:700;">v8 · Wallet Intel (2)</div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#fb923c">novel_dump</span><br><span style="color:var(--muted);font-size:9px">New wallet + big tx</span></div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#fb923c">conc_inflow</span><br><span style="color:var(--muted);font-size:9px">Sweep collector</span></div>
+    </div>
+    <div>
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:700;">v9 · Speed + Sanctions (3)</div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#f87171">OFAC_SDN</span><br><span style="color:var(--muted);font-size:9px">Sanctions kill shot</span></div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#f87171">flash_loan_burst</span><br><span style="color:var(--muted);font-size:9px">Seconds-level attack</span></div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#f87171">coord_burst</span><br><span style="color:var(--muted);font-size:9px">Simultaneous senders</span></div>
+    </div>
+    <div>
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:700;">v10 · Dormancy (1)</div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#4ade80">dormant_activation</span><br><span style="color:var(--muted);font-size:9px">Sleeping wallet revives</span></div>
+    </div>
+    <div>
+      <div style="font-size:10px;color:#22d3ee;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:700;border-bottom:1px solid rgba(6,182,212,.3);padding-bottom:4px;">v11 · New (7) ✦</div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#22d3ee">wash_cycle</span><br><span style="color:var(--muted);font-size:9px">A→B→A round trip</span></div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#22d3ee">smurfing</span><br><span style="color:var(--muted);font-size:9px">Coord threshold dodge</span></div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#22d3ee">exit_rush</span><br><span style="color:var(--muted);font-size:9px">New wallet → bridge fast</span></div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#22d3ee">rapid_succession</span><br><span style="color:var(--muted);font-size:9px">1 sender → 5+ recv/5min</span></div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#22d3ee">high_risk_country</span><br><span style="color:var(--muted);font-size:9px">FATF blacklist amplifier</span></div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#22d3ee">exchange_avoidance</span><br><span style="color:var(--muted);font-size:9px">Routes around exchanges</span></div>
+      <div class="rule-chip" style="display:block;margin:4px 0;"><span style="color:#22d3ee">layering_deep</span><br><span style="color:var(--muted);font-size:9px">5+ hop extended chain</span></div>
+    </div>
+  </div>
+  <div style="margin-top:10px;font-size:10px;padding:8px 12px;border-radius:5px;background:rgba(6,182,212,.06);border:1px solid rgba(6,182,212,.15);color:#67e8f9;">
+    ✦ v11 adds 7 rules. Engine ceiling: <strong>94.9%</strong>. Remaining gap needs block-level timestamps + cross-chain data. AI Layer v1 live: Isolation Forest deployed → 21 AI-only anomalies found. Next: GNN (GraphSAGE) on labelled graph snapshots.
+  </div>
+</div>
+
+<!-- ── TRIAGE LABELER BANNER ── -->
+<div style="background:rgba(249,115,22,.05);border:1px solid rgba(249,115,22,.25);border-radius:9px;padding:14px 20px;margin-bottom:16px;">
+  <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#fb923c;font-weight:700;margin-bottom:8px;">Triage Labeler v1 · Dynamic Confidence Scoring · Item Rarity System</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+    <div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">
+        <strong style="color:#e2e8f0;">4-Dimension Risk Engine:</strong> Each signal's weight floats based on what the other signals are doing.
+        A $500k tx hitting 1 rule ≠ a $200 tx hitting 1 rule. Same rule, different weight — because context changes meaning.
+        Combination bonus causes geometric escalation when signals converge. Exactly like item affixes: 3 affixes together = legendary (not just 3× common).
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:11px;">
+        <span style="background:rgba(249,115,22,.15);color:#fb923c;padding:3px 9px;border-radius:4px;">⬡ Amount Tier (0–40)</span>
+        <span style="background:rgba(79,110,247,.15);color:#818cf8;padding:3px 9px;border-radius:4px;">⬡ Rule Density (0–50)</span>
+        <span style="background:rgba(34,197,94,.15);color:#4ade80;padding:3px 9px;border-radius:4px;">⬡ Frequency (0–35)</span>
+        <span style="background:rgba(124,58,237,.15);color:#a78bfa;padding:3px 9px;border-radius:4px;">⬡ AI Score (0–25)</span>
+        <span style="background:rgba(239,68,68,.15);color:#f87171;padding:3px 9px;border-radius:4px;">⬡ Combo Bonus (+30)</span>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">Analyst Queue: 695 flagged → 256 high-priority → 63% reduction</div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="color:#fb923c;font-size:12px;font-weight:700;width:90px;">🟠 LEGENDARY</span>
+          <div style="height:8px;background:#fb923c;border-radius:2px;width:calc(139/695*300px);min-width:4px"></div>
+          <span style="color:var(--muted);font-size:11px;">139 · Immediate freeze + SAR</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="color:#a78bfa;font-size:12px;font-weight:700;width:90px;">🟣 RARE</span>
+          <div style="height:8px;background:#a78bfa;border-radius:2px;width:calc(117/695*300px);min-width:4px"></div>
+          <span style="color:var(--muted);font-size:11px;">117 · Investigate today</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="color:#818cf8;font-size:12px;font-weight:700;width:90px;">🔵 MAGIC</span>
+          <div style="height:8px;background:#818cf8;border-radius:2px;width:calc(244/695*300px);min-width:4px"></div>
+          <span style="color:var(--muted);font-size:11px;">244 · Batch review</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="color:#94a3b8;font-size:12px;font-weight:700;width:90px;">⚪ COMMON</span>
+          <div style="height:8px;background:#475569;border-radius:2px;width:calc(306/695*300px);min-width:4px"></div>
+          <span style="color:var(--muted);font-size:11px;">306 · Auto-log, low priority</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="padding:8px 12px;background:rgba(0,0,0,.25);border-radius:6px;font-size:11px;color:var(--muted);">
+    <strong style="color:#fbbf24;">AI-only anomalies classified:</strong> 1 RARE ($1B whale, 0 rule fires, AI score 79.8 — statistically impossible to ignore) · 7 MAGIC (large amounts, zero-rule, AI-only signal) · 13 COMMON (small txns, borderline statistical outliers, low priority).
+    The 1 RARE AI-only catch is the most interesting: rules didn't touch it, but AI says something is structurally wrong with the flow topology.
+  </div>
+</div>
+
+<!-- ── AI LAYERS ── -->
+<div class="section-divider">Beyond Rules — 4 AI Detection Layers</div>
+<div class="g4" style="margin-bottom:16px;">
+  <div class="card" style="border-color:rgba(129,140,248,.35);">
+    <div style="color:#818cf8;font-weight:700;font-size:13px;margin-bottom:6px;">Layer 1 · Rules v11</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Fast, explainable, legally defensible. OFAC match = fact, not probability. 22 rules, 94.9% detection.</div>
+    <div style="background:rgba(129,140,248,.1);border-radius:4px;padding:5px 8px;font-size:10px;color:#818cf8;font-weight:600;">✓ LIVE · 94.9% detection</div>
+  </div>
+  <div class="card" style="border-color:rgba(124,58,237,.35);">
+    <div style="color:#a78bfa;font-weight:700;font-size:13px;margin-bottom:6px;">Layer 2 · Anomaly (IF)</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Isolation Forest on 13 graph features. Unsupervised — no labels. Flags statistical outliers. Caught 21 transactions rules never touched.</div>
+    <div style="background:rgba(124,58,237,.1);border-radius:4px;padding:5px 8px;font-size:10px;color:#a78bfa;font-weight:600;">✓ LIVE · 21 AI-only finds</div>
+  </div>
+  <div class="card" style="border-color:rgba(249,115,22,.2);">
+    <div style="color:#fb923c;font-weight:700;font-size:13px;margin-bottom:6px;">Layer 3 · Graph (GNN)</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">GraphSAGE — wallets as nodes, transactions as edges. Learns attack cluster topology. Finds Ronin-style chains even without OFAC labels.</div>
+    <div style="background:rgba(249,115,22,.1);border-radius:4px;padding:5px 8px;font-size:10px;color:#fb923c;font-weight:600;">⬡ PLANNED · needs PyG + 5k labelled graphs</div>
+  </div>
+  <div class="card" style="border-color:rgba(34,197,94,.2);">
+    <div style="color:#4ade80;font-weight:700;font-size:13px;margin-bottom:6px;">Layer 4 · Sequence (LSTM)</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Transformer over wallet tx history. Learns full laundering sequence: dormancy → revival → fan-out → exchange exit as one learnable pattern.</div>
+    <div style="background:rgba(34,197,94,.1);border-radius:4px;padding:5px 8px;font-size:10px;color:#4ade80;font-weight:600;">⬡ PLANNED · v12+ target</div>
+  </div>
+</div>
+
+</div><!-- /page -->
+
+<footer>
+  <span>NEXUS-RISK v11 · <strong>Bionic Banker</strong> · bionicbanker.tech · Powered by SYOS</span>
+  <span>813 txns · 12 cases · 5 attack groups · 22 rules · AI Layer v1 · Feb 2026</span>
+</footer>
+
+<script>
+const CHART_DEFAULTS = {
+  color: '#e2e8f0',
+  plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+  scales: {
+    x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#1c1f2e' } },
+    y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#1c1f2e' } }
+  }
+};
+
+// ── Chart 1: Case-by-case detection, v7 vs v9 vs v10 ──
+(function(){
+  const ctx = document.getElementById('caseChart').getContext('2d');
+  const labels = ['Tornado','Ronin','Lazarus','Bybit','Euler','Wormhole','Nomad'];
+  const v7  = [100, 6.1, 24.4, 0, 15.8, null, null];
+  const v9  = [100, 100, 100, 100, 35.1, null, null];
+  const v10 = [100, 84.3, 100, 100, 23.3, 100, 100];
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'v7 (baseline)', data: v7,  backgroundColor: 'rgba(129,140,248,.5)', borderColor: '#818cf8', borderWidth: 1 },
+        { label: 'v9 (OFAC)',     data: v9,  backgroundColor: 'rgba(248,113,113,.5)', borderColor: '#f87171', borderWidth: 1 },
+        { label: 'v10 (current)', data: v10, backgroundColor: 'rgba(74,222,128,.65)', borderColor: '#4ade80', borderWidth: 1.5 }
+      ]
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+      scales: {
+        x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#1c1f2e' } },
+        y: { min: 0, max: 110, ticks: { color: '#64748b', font: { size: 10 }, callback: v => v+'%' }, grid: { color: '#1c1f2e' } }
+      }
+    }
+  });
+})();
+
+// ── Chart 2: Precision-Recall Tradeoff ──
+(function(){
+  const ctx = document.getElementById('tradeoffChart').getContext('2d');
+  const points = [
+    { x: 14.4, y: 62.8, label: 'v7' },
+    { x: 27.9, y: 70.0, label: 'v8' },
+    { x: 27.9, y: 93.1, label: 'v9' },
+    { x: 20.2, y: 94.9, label: 'v10/v11' },
+    { x: 20.6, y: 5.3,  label: 'AI (IF)' },
+  ];
+  new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'Engine versions',
+        data: points,
+        backgroundColor: ['rgba(129,140,248,.8)','rgba(251,146,60,.8)','rgba(248,113,113,.8)','rgba(74,222,128,.9)','rgba(167,139,250,.9)'],
+        pointRadius: [7,7,7,10,9],
+        pointHoverRadius: 11
+      }]
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const p = points[ctx.dataIndex];
+              return `${p.label}: FP ${p.x}% · Det ${p.y}%`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: 'False Positive Rate (%)', color: '#64748b', font: { size: 10 } }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#1c1f2e' }, min: 0, max: 45 },
+        y: { title: { display: true, text: 'Detection Rate (%)', color: '#64748b', font: { size: 10 } }, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#1c1f2e' }, min: 0, max: 105 }
+      }
+    }
+  });
+})();
+
+// ── Chart 3: Rules doughnut ──
+(function(){
+  const ctx = document.getElementById('rulesChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['v6 Core (4)','v7 Chain-Native (4)','v8 Wallet Intel (2)','v9 Sanctions+Speed (3)','v10 Dormancy (1)','v11 New Rules (7)'],
+      datasets: [{
+        data: [4,4,2,3,1,7],
+        backgroundColor: ['rgba(129,140,248,.75)','rgba(167,139,250,.75)','rgba(251,146,60,.75)','rgba(248,113,113,.75)','rgba(74,222,128,.75)','rgba(6,182,212,.75)'],
+        borderColor: '#0f111a',
+        borderWidth: 2
+      }]
+    },
+    options: {
+      maintainAspectRatio: false,
+      cutout: '62%',
+      plugins: { legend: { position: 'right', labels: { color: '#94a3b8', font: { size: 10 }, boxWidth: 10, padding: 8 } } }
+    }
+  });
+})();
+
+// ── Chart 4: Score distribution by band ──
+(function(){
+  const ctx = document.getElementById('scoreDistChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['0-39\n(Low)','40-59\n(Med)','60-79\n(High)','80-149\n(Crit)','150-299\n(Crit+)','300+\n(MaxCrit)'],
+      datasets: [{
+        label: 'Transaction count',
+        data: [112, 20, 1, 40, 290, 350],
+        backgroundColor: ['rgba(74,222,128,.6)','rgba(234,179,8,.6)','rgba(249,115,22,.6)','rgba(239,68,68,.5)','rgba(239,68,68,.7)','rgba(239,68,68,.9)'],
+        borderColor: ['#4ade80','#facc15','#fb923c','#f87171','#ef4444','#dc2626'],
+        borderWidth: 1.5
+      }]
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: '#1c1f2e' } },
+        y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#1c1f2e' } }
+      }
+    }
+  });
+})();
+</script>
+</body>
+</html>

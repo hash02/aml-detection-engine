@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+.venv/
+
+# Data — don't commit full datasets or API keys
+data/transactions_v10.csv
+data/real_transactions_full.csv
+data/blockchain_transactions.csv
+*.env
+config_secrets.py
+
+# Engine outputs — don't commit scored results
+output_v*/
+output_ai/
+*.json
+!package.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
