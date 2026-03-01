@@ -155,6 +155,7 @@ CONFIG = {
     # ── v6 Thresholds (unchanged) ──
     "fan_in_threshold":          4,
     "velocity_window_minutes":   60,
+    "struct_window_hours":       6,    # extended window for spread-out structuring
     "layering_window_hours":     1,    # tighter for on-chain speed
     "layering_max_depth":        3,
     "layering_min_amount":       100,
@@ -257,7 +258,8 @@ PROFILE_CONFIG = {
         "large_amount_threshold":      8_000,
         "velocity_tx_count_threshold": 6,
         "struct_max_amount":           4_999,
-        "struct_min_count":            6,
+        "struct_min_count":            3,    # v12: 6→3 (real structuring starts at 3 txns)
+        "struct_min_count_6h":         5,    # extended 6h window threshold
         "score_multiplier":            1.20,
         "description": "New wallet — tighter monitoring applied",
     },
@@ -265,7 +267,8 @@ PROFILE_CONFIG = {
         "large_amount_threshold":     10_000,
         "velocity_tx_count_threshold": 8,
         "struct_max_amount":           4_999,
-        "struct_min_count":            8,
+        "struct_min_count":            4,    # v12: 8→4 (3+ txns just under $5k = structuring signal)
+        "struct_min_count_6h":         5,    # extended 6h window threshold
         "score_multiplier":            1.00,
         "description": "Personal wallet — standard monitoring",
     },
@@ -273,7 +276,8 @@ PROFILE_CONFIG = {
         "large_amount_threshold":     50_000,
         "velocity_tx_count_threshold":15,
         "struct_max_amount":           9_999,
-        "struct_min_count":           10,
+        "struct_min_count":            5,    # v12: 10→5
+        "struct_min_count_6h":         8,    # extended 6h window threshold
         "score_multiplier":            0.85,
         "description": "Contract/business wallet — relaxed thresholds",
     },
@@ -304,30 +308,45 @@ def load_data(path: str) -> pd.DataFrame:
 # ─────────────────────────────────────────────
 def compute_features(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     df = df.copy()
-    window = timedelta(minutes=cfg["velocity_window_minutes"])
-    tx_counts, small_counts, fan_in_counts = [], [], []
+    window_60m  = timedelta(minutes=cfg["velocity_window_minutes"])
+    window_6h   = timedelta(hours=cfg.get("struct_window_hours", 6))
+
+    tx_counts, small_counts, small_counts_6h, fan_in_counts = [], [], [], []
 
     for i, row in df.iterrows():
         pcfg = PROFILE_CONFIG.get(row["sender_profile"], PROFILE_CONFIG[DEFAULT_PROFILE])
+
+        # 60-minute window (velocity + short structuring)
         window_mask = (
             (df["sender_id"] == row["sender_id"]) &
-            (df["timestamp"] >= row["timestamp"] - window) &
+            (df["timestamp"] >= row["timestamp"] - window_60m) &
             (df["timestamp"] <= row["timestamp"])
         )
         window_df = df[window_mask]
         tx_counts.append(len(window_df))
         small_counts.append((window_df["amount"] <= pcfg["struct_max_amount"]).sum())
 
+        # 6-hour window (catches spread-out structuring across hours)
+        window_6h_mask = (
+            (df["sender_id"] == row["sender_id"]) &
+            (df["timestamp"] >= row["timestamp"] - window_6h) &
+            (df["timestamp"] <= row["timestamp"])
+        )
+        window_6h_df = df[window_6h_mask]
+        small_counts_6h.append((window_6h_df["amount"] <= pcfg["struct_max_amount"]).sum())
+
+        # Fan-in: how many unique senders to this receiver in 60m window
         fan_mask = (
             (df["receiver_id"] == row["receiver_id"]) &
-            (df["timestamp"] >= row["timestamp"] - window) &
+            (df["timestamp"] >= row["timestamp"] - window_60m) &
             (df["timestamp"] <= row["timestamp"])
         )
         fan_in_counts.append(df[fan_mask]["sender_id"].nunique())
 
-    df["tx_count_in_window"]       = tx_counts
-    df["small_tx_count_in_window"] = small_counts
-    df["fan_in_count"]             = fan_in_counts
+    df["tx_count_in_window"]        = tx_counts
+    df["small_tx_count_in_window"]  = small_counts
+    df["small_tx_count_6h"]         = small_counts_6h
+    df["fan_in_count"]              = fan_in_counts
     return df
 
 
@@ -1388,7 +1407,10 @@ def score_row(row, cfg):
         score += cfg["w_large"]; reasons += "large_amount;"
     if row["tx_count_in_window"] >= pcfg["velocity_tx_count_threshold"]:
         score += cfg["w_velocity"]; reasons += "velocity_many_tx;"
-    if row["small_tx_count_in_window"] >= pcfg["struct_min_count"]:
+    # Structuring: check 60-min window OR 6-hour window (catches spread-out patterns)
+    struct_60m = row["small_tx_count_in_window"] >= pcfg["struct_min_count"]
+    struct_6h  = row.get("small_tx_count_6h", 0) >= pcfg.get("struct_min_count_6h", pcfg["struct_min_count"] * 2)
+    if struct_60m or struct_6h:
         score += cfg["w_structuring"]; reasons += "structuring;"
     if row["fan_in_count"] >= cfg["fan_in_threshold"]:
         score += cfg["w_fan_in"]; reasons += "fan_in;"
@@ -1397,7 +1419,7 @@ def score_row(row, cfg):
     other_hit  = (
         row["amount"]                   >= pcfg["large_amount_threshold"] or
         row["tx_count_in_window"]       >= pcfg["velocity_tx_count_threshold"] or
-        row["small_tx_count_in_window"] >= pcfg["struct_min_count"] or
+        struct_60m or struct_6h or
         row["fan_in_count"]             >= cfg["fan_in_threshold"]
     )
     if is_foreign:
