@@ -238,6 +238,13 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     st.markdown("**Data Source**")
+    st.markdown("""
+    <div style='font-size:0.75rem; color:#505068; line-height:1.55; margin-bottom:0.6rem;'>
+      ⚠️ <strong style='color:#8a8aa0;'>Sample data uses known sanctioned wallets</strong>
+      (Lazarus Group, Wormhole exploiter). Expect 90–100% CRITICAL — that's correct.
+      Paste your own address in Live mode to see how the scoring varies.
+    </div>
+    """, unsafe_allow_html=True)
     data_mode = st.radio(
         "Choose input",
         [
@@ -389,6 +396,21 @@ if not data_loaded:
     })
     st.dataframe(schema, use_container_width=True, hide_index=True)
     st.stop()
+
+# ── Context banner for sample data ───────────────────────────────────────────
+if data_mode == "📋 Use Sample Data (Wormhole, Ronin, Lazarus)":
+    st.markdown("""
+    <div style='background:#1a0f0f; border:1px solid rgba(239,68,68,0.25); border-radius:10px;
+                padding:0.85rem 1.1rem; margin-bottom:1.25rem; font-size:0.85rem; line-height:1.6;'>
+      <strong style='color:#ef4444;'>Why is everything CRITICAL?</strong>
+      <span style='color:#a8a8b8;'> — This dataset contains real transactions from
+      <strong style='color:#ededf5;'>OFAC-sanctioned wallets</strong>: the Ronin Bridge exploiter
+      (Lazarus Group, North Korea) and the Wormhole attacker. Every transaction touching a sanctioned
+      address scores CRITICAL by design. That's the engine working correctly, not a bug.
+      To see varied scoring, switch to <strong style='color:#5b73f8;'>🔗 Fetch Live Blockchain Data</strong>
+      and paste any Ethereum address.</span>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ── Run engine ────────────────────────────────────────────────────────────────
 cfg = {**CONFIG, "alert_threshold": alert_threshold}
