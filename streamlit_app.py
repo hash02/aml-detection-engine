@@ -15,8 +15,17 @@ Run locally:
 import sys
 import os
 import io
+import time
 import pandas as pd
 import streamlit as st
+
+# ── Import live fetcher ──────────────────────────────────────────────────────
+sys.path.insert(0, os.path.dirname(__file__))
+try:
+    from etherscan_fetcher import fetch_live_data, DEFAULT_SEEDS
+    LIVE_FEED_AVAILABLE = True
+except ImportError:
+    LIVE_FEED_AVAILABLE = False
 
 # ── Import the engine (all pure functions, no file I/O needed) ──────────────
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "engine"))
@@ -231,11 +240,18 @@ with st.sidebar:
     st.markdown("**Data Source**")
     data_mode = st.radio(
         "Choose input",
-        ["📋 Use Sample Data (Wormhole, Ronin, Lazarus)", "📤 Upload My CSV"],
+        [
+            "📋 Use Sample Data (Wormhole, Ronin, Lazarus)",
+            "🔗 Fetch Live Blockchain Data",
+            "📤 Upload My CSV",
+        ],
         label_visibility="collapsed",
     )
 
     uploaded_file = None
+    live_api_key = ""
+    live_address = ""
+
     if data_mode == "📤 Upload My CSV":
         uploaded_file = st.file_uploader(
             "Upload transaction CSV",
@@ -243,6 +259,26 @@ with st.sidebar:
             help="Required columns: sender_id, receiver_id, amount, country, timestamp, sender_profile, sender_tx_count, sender_avg_amount, sender_active_days",
         )
         st.caption("Required columns: sender_id, receiver_id, amount, country, timestamp, sender_profile, sender_tx_count, sender_avg_amount, sender_active_days")
+
+    elif data_mode == "🔗 Fetch Live Blockchain Data":
+        st.markdown("""
+        <div style='font-size:0.78rem; color:#8a8aa0; margin-bottom:0.75rem; line-height:1.6;'>
+          Pulls real Ethereum transactions and runs them through the engine live.
+          Uses publicly documented high-risk wallet clusters by default.
+        </div>
+        """, unsafe_allow_html=True)
+        live_address = st.text_input(
+            "Ethereum address (optional)",
+            placeholder="0x... or leave blank for default seeds",
+            help="Leave blank to use default seed addresses (Ronin hacker, publicly documented exploit wallets)"
+        )
+        live_api_key = st.text_input(
+            "Etherscan API key (optional but recommended)",
+            type="password",
+            placeholder="Get free key at etherscan.io/register",
+            help="Free key = 5 req/sec. Without = 1 req/5sec (slower but works)"
+        )
+        st.caption("⚠️ Fetching live data may take 30–60 seconds depending on rate limits.")
 
     st.divider()
 
@@ -282,6 +318,9 @@ st.markdown("""
 
 # ── Load data ─────────────────────────────────────────────────────────────────
 sample_data_path = os.path.join(os.path.dirname(__file__), "data", "sample_transactions.csv")
+raw_df = None
+data_loaded = False
+data_label = ""
 
 if data_mode == "📋 Use Sample Data (Wormhole, Ronin, Lazarus)":
     try:
@@ -290,9 +329,43 @@ if data_mode == "📋 Use Sample Data (Wormhole, Ronin, Lazarus)":
         data_label = "sample dataset (Wormhole · Ronin · Lazarus Group)"
     except FileNotFoundError:
         st.error("Sample data file not found. Please upload your own CSV.")
-        data_loaded = False
-        raw_df = None
-else:
+
+elif data_mode == "🔗 Fetch Live Blockchain Data":
+    if not LIVE_FEED_AVAILABLE:
+        st.error("Live feed module not found. Make sure etherscan_fetcher.py is in the root folder.")
+    else:
+        col_btn, col_info = st.columns([1, 3])
+        with col_btn:
+            fetch_clicked = st.button("🔗 Fetch Live Data Now", use_container_width=True)
+        with col_info:
+            st.caption("Fetches real Ethereum transactions from Etherscan and runs the engine on them.")
+
+        if fetch_clicked:
+            addresses = [live_address.strip()] if live_address.strip() else DEFAULT_SEEDS
+            with st.spinner(f"Fetching {len(addresses)} address(es) from Etherscan... (30–60 sec)"):
+                try:
+                    live_df = fetch_live_data(
+                        addresses=addresses,
+                        api_key=live_api_key.strip(),
+                        limit=300,
+                        expand_hops=True,
+                        output_path=os.path.join(os.path.dirname(__file__), "data", "live_transactions.csv")
+                    )
+                    if not live_df.empty:
+                        raw_df = live_df
+                        data_loaded = True
+                        n_addr = len(addresses)
+                        addr_preview = addresses[0][:10] + "..." if addresses else "default seeds"
+                        data_label = f"live Ethereum data · {len(raw_df)} transactions · {n_addr} address(es)"
+                        st.success(f"✅ Fetched {len(raw_df)} live transactions. Running engine...")
+                    else:
+                        st.error("No transactions returned. Check your address or try with an API key.")
+                except Exception as e:
+                    st.error(f"Fetch failed: {e}")
+        else:
+            st.info("👆 Click 'Fetch Live Data Now' to pull real Ethereum transactions.")
+
+elif data_mode == "📤 Upload My CSV":
     if uploaded_file is not None:
         try:
             raw_df = pd.read_csv(uploaded_file)
@@ -300,11 +373,6 @@ else:
             data_label = f"uploaded file: {uploaded_file.name}"
         except Exception as e:
             st.error(f"Could not read CSV: {e}")
-            data_loaded = False
-            raw_df = None
-    else:
-        data_loaded = False
-        raw_df = None
 
 # ── Show schema guide if no data ──────────────────────────────────────────────
 if not data_loaded:
