@@ -163,69 +163,92 @@ def get_eth_price_usd() -> float:
 # ETHERSCAN API
 # ─────────────────────────────────────────────────────────────────────────────
 
-BASE_URL = "https://api.etherscan.io/api"
+# ─────────────────────────────────────────────────────────────────────────────
+# BLOCKCHAIR API  (primary — free, no key required)
+# Falls back to Etherscan V2 if a key is provided.
+# ─────────────────────────────────────────────────────────────────────────────
 
-def fetch_transactions(address: str, api_key: str = "", limit: int = 500) -> list:
-    """
-    Fetch normal transactions for an address from Etherscan.
-    Returns list of raw transaction dicts.
-    Free tier without key: 1 req/5sec. With key: 5 req/sec.
-    """
-    params = {
-        "module": "account",
-        "action": "txlist",
-        "address": address,
-        "startblock": 0,
-        "endblock": 99999999,
-        "page": 1,
-        "offset": min(limit, 10000),   # Etherscan max per call
-        "sort": "desc",                 # most recent first
-    }
-    if api_key:
-        params["apikey"] = api_key
+BLOCKCHAIR_URL = "https://api.blockchair.com/ethereum/transactions"
+ETHERSCAN_V2_URL = "https://api.etherscan.io/v2/api"
 
+
+def fetch_blockchair(address: str, limit: int = 300) -> list:
+    """
+    Fetch transactions for an address using Blockchair API.
+    No API key needed. Free tier: ~30 req/min.
+    Returns list of raw Blockchair transaction dicts.
+    """
+    rows = []
+    for role in ["sender", "recipient"]:
+        offset = 0
+        while offset < limit:
+            try:
+                resp = requests.get(
+                    BLOCKCHAIR_URL,
+                    params={
+                        "q": f"{role}({address})",
+                        "limit": min(100, limit - offset),
+                        "offset": offset,
+                        "s": "time(asc)",
+                    },
+                    timeout=20,
+                )
+                data = resp.json()
+                batch = data.get("data", [])
+                if not batch:
+                    break
+                rows.extend(batch)
+                offset += len(batch)
+                if len(batch) < 100:
+                    break
+                time.sleep(0.35)   # polite to free tier
+            except Exception as e:
+                print(f"[FETCH] Blockchair error ({role}, {address[:10]}...): {e}")
+                break
+    print(f"[FETCH] {address[:10]}... → {len(rows)} transactions (Blockchair)")
+    return rows
+
+
+def fetch_etherscan_v2(address: str, api_key: str, limit: int = 500) -> list:
+    """
+    Fetch transactions using Etherscan V2 API (requires free API key).
+    Register at etherscan.io/register — free, takes 30 seconds.
+    """
     try:
-        resp = requests.get(BASE_URL, params=params, timeout=15)
+        resp = requests.get(
+            ETHERSCAN_V2_URL,
+            params={
+                "chainid": 1,
+                "module": "account",
+                "action": "txlist",
+                "address": address,
+                "page": 1,
+                "offset": min(limit, 10000),
+                "sort": "asc",
+                "apikey": api_key,
+            },
+            timeout=15,
+        )
         data = resp.json()
         if data["status"] == "1":
-            txns = data["result"]
-            print(f"[FETCH] {address[:10]}... → {len(txns)} transactions")
-            return txns
-        elif data["message"] == "No transactions found":
-            print(f"[FETCH] {address[:10]}... → 0 transactions")
-            return []
-        else:
-            print(f"[FETCH] Error for {address[:10]}...: {data.get('message', 'unknown')}")
-            return []
-    except Exception as e:
-        print(f"[FETCH] Request failed for {address}: {e}")
-        return []
-
-
-def fetch_internal_transactions(address: str, api_key: str = "", limit: int = 200) -> list:
-    """
-    Fetch internal transactions (contract calls, ETH forwarding).
-    Important for detecting peel chains that go through contract hops.
-    """
-    params = {
-        "module": "account",
-        "action": "txlistinternal",
-        "address": address,
-        "page": 1,
-        "offset": min(limit, 10000),
-        "sort": "desc",
-    }
-    if api_key:
-        params["apikey"] = api_key
-
-    try:
-        resp = requests.get(BASE_URL, params=params, timeout=15)
-        data = resp.json()
-        if data["status"] == "1":
+            print(f"[FETCH] {address[:10]}... → {len(data['result'])} transactions (Etherscan V2)")
             return data["result"]
-        return []
-    except Exception:
-        return []
+        else:
+            print(f"[FETCH] Etherscan V2 error: {data.get('message', 'unknown')} — falling back to Blockchair")
+            return fetch_blockchair(address, limit)
+    except Exception as e:
+        print(f"[FETCH] Etherscan V2 failed: {e} — falling back to Blockchair")
+        return fetch_blockchair(address, limit)
+
+
+def fetch_transactions(address: str, api_key: str = "", limit: int = 300) -> list:
+    """
+    Main fetch function. Uses Blockchair by default (no key needed).
+    If an Etherscan V2 API key is provided, uses that instead.
+    """
+    if api_key:
+        return fetch_etherscan_v2(address, api_key, limit)
+    return fetch_blockchair(address, limit)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -262,68 +285,99 @@ def infer_country(address: str) -> str:
 # Maps raw Etherscan API response → engine schema
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _normalize_tx(tx: dict) -> dict:
+    """
+    Normalize a raw transaction dict to a common internal format,
+    handling both Blockchair and Etherscan V2 field names.
+
+    Blockchair fields: sender, recipient, value (wei str), time (datetime str), hash
+    Etherscan V2 fields: from, to, value (wei str), timeStamp (unix str), hash, isError, contractAddress
+    """
+    # Detect source by field presence
+    if "sender" in tx:
+        # Blockchair format
+        return {
+            "hash":            tx.get("hash", ""),
+            "from":            tx.get("sender", "").lower(),
+            "to":              tx.get("recipient", "").lower(),
+            "value":           str(tx.get("value", "0")),
+            "timestamp_str":   tx.get("time", ""),
+            "timestamp_unix":  None,
+            "is_error":        tx.get("failed", False),
+            "is_contract":     tx.get("type", "") == "call" and tx.get("recipient", "") == "",
+        }
+    else:
+        # Etherscan V2 format
+        return {
+            "hash":            tx.get("hash", ""),
+            "from":            tx.get("from", "").lower(),
+            "to":              tx.get("to", "").lower(),
+            "value":           str(tx.get("value", "0")),
+            "timestamp_str":   None,
+            "timestamp_unix":  tx.get("timeStamp"),
+            "is_error":        tx.get("isError") == "1",
+            "is_contract":     bool(tx.get("contractAddress")),
+        }
+
+
 def build_transaction_rows(raw_txns: list, eth_price: float, source_address: str) -> list:
     """
-    Convert raw Etherscan transaction list into engine-ready rows.
-    Filters out failed transactions and zero-value txns.
+    Convert raw transaction list (Blockchair or Etherscan V2) into engine-ready rows.
+    Filters out failed transactions and zero-value txns (unless mixer-involved).
     """
     rows = []
     for tx in raw_txns:
-        # Skip failed transactions
-        if tx.get("isError") == "1":
+        n = _normalize_tx(tx)
+
+        if n["is_error"]:
             continue
 
-        # Convert wei → ETH → USD
+        # Convert value (wei string) → USD
         try:
-            value_wei = int(tx.get("value", 0))
+            value_wei = int(n["value"])
         except (ValueError, TypeError):
             value_wei = 0
 
+        sender   = n["from"]
+        receiver = n["to"]
+
         if value_wei == 0:
-            # Zero-value tx = contract interaction, not a transfer
-            # Still keep it if it involves a known mixer (detect mixer_touch)
-            sender_lower = tx.get("from", "").lower()
-            receiver_lower = tx.get("to", "").lower()
-            if sender_lower not in KNOWN_MIXERS and receiver_lower not in KNOWN_MIXERS:
+            # Keep zero-value only if mixer-involved
+            if sender not in KNOWN_MIXERS and receiver not in KNOWN_MIXERS:
                 continue
-
-        amount_eth = value_wei / 1e18
-        amount_usd = amount_eth * eth_price
-
-        sender   = tx.get("from", "").lower()
-        receiver = tx.get("to",   "").lower()
 
         if not sender or not receiver:
             continue
 
-        # Timestamp
+        amount_usd = (value_wei / 1e18) * eth_price
+
+        # Parse timestamp
         try:
-            ts = datetime.utcfromtimestamp(int(tx.get("timeStamp", 0)))
+            if n["timestamp_str"]:
+                ts = datetime.strptime(n["timestamp_str"], "%Y-%m-%d %H:%M:%S")
+            elif n["timestamp_unix"]:
+                ts = datetime.utcfromtimestamp(int(n["timestamp_unix"]))
+            else:
+                continue
         except (ValueError, TypeError):
             continue
-
-        # is_contract: if the receiver has a non-empty contractAddress field
-        # (Etherscan fills this for contract creation txns)
-        # Alternatively: if receiver is in known sets
-        is_contract = bool(tx.get("contractAddress"))
 
         is_mixer  = (sender in KNOWN_MIXERS or receiver in KNOWN_MIXERS)
         is_bridge = (sender in KNOWN_BRIDGES or receiver in KNOWN_BRIDGES)
 
         rows.append({
-            "id":           tx.get("hash", ""),
-            "sender_id":    sender,
-            "receiver_id":  receiver,
-            "amount":       round(amount_usd, 2),
-            "country":      infer_country(sender),
-            "timestamp":    ts,
-            "label":        "LIVE",
-            "sender_profile": classify_profile(sender, is_contract),
+            "id":             n["hash"],
+            "sender_id":      sender,
+            "receiver_id":    receiver,
+            "amount":         round(amount_usd, 2),
+            "country":        infer_country(sender),
+            "timestamp":      ts,
+            "label":          "LIVE",
+            "sender_profile": classify_profile(sender, n["is_contract"]),
             "is_known_mixer": is_mixer,
-            "is_bridge":    is_bridge,
-            # Placeholder stats — recomputed below after full graph is built
-            "sender_tx_count":   0,
-            "sender_avg_amount": 0.0,
+            "is_bridge":      is_bridge,
+            "sender_tx_count":    0,
+            "sender_avg_amount":  0.0,
             "sender_active_days": 0.0,
         })
 
