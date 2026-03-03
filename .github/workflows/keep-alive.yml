@@ -4,7 +4,7 @@ on:
   schedule:
     # Runs every 6 hours — keeps Streamlit from sleeping (free tier sleeps after 12h)
     - cron: '0 */6 * * *'
-  workflow_dispatch:  # Allow manual trigger from GitHub Actions tab
+  workflow_dispatch:  # Allow manual trigger from GitHub Actions tab + phone
 
 jobs:
   ping:
@@ -13,54 +13,61 @@ jobs:
       - name: Wake up Streamlit demo
         run: |
           echo "Pinging AML Engine demo..."
+          DEMO_URL="https://aml-detection-engine-ewxnmkbekcg8scjjes7caa.streamlit.app/"
 
-          # Install playwright
+          # First try: simple HTTP ping (works if app is already awake)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$DEMO_URL")
+          echo "HTTP status: $STATUS"
+
+          if [ "$STATUS" = "200" ]; then
+            echo "App is awake (HTTP 200). Done."
+            exit 0
+          fi
+
+          echo "App may be sleeping (status $STATUS). Trying browser wake..."
+
+          # Install playwright for browser-based wake
           pip install playwright --quiet
           playwright install chromium --with-deps --quiet
 
-          # Python script to actually wake the app (HTTP GET alone won't work —
-          # Streamlit needs a real browser to establish the WebSocket connection)
-          python3 << 'EOF'
-          import subprocess
-          import sys
-          import time
+          # Run wake script — NO indentation so Python is happy
+          python3 << 'PYEOF'
+import sys
+import time
 
-          DEMO_URL = "https://aml-detection-engine-ewxnmkbekcg8scjjes7caa.streamlit.app/"
+DEMO_URL = "https://aml-detection-engine-ewxnmkbekcg8scjjes7caa.streamlit.app/"
 
-          try:
-              from playwright.sync_api import sync_playwright
+try:
+    from playwright.sync_api import sync_playwright
 
-              with sync_playwright() as p:
-                  browser = p.chromium.launch(headless=True)
-                  page = browser.new_page()
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
 
-                  print(f"Navigating to {DEMO_URL}")
-                  page.goto(DEMO_URL, timeout=60000)
+        print(f"Navigating to {DEMO_URL}")
+        page.goto(DEMO_URL, timeout=60000)
 
-                  # Check if app is sleeping — look for wake-up button
-                  try:
-                      wake_btn = page.locator("text=Yes, get this app back up")
-                      if wake_btn.count() > 0:
-                          print("App was sleeping — clicking wake button...")
-                          wake_btn.first.click()
-                          page.wait_for_timeout(15000)  # Wait 15s for boot
-                          print("Wake button clicked.")
-                      else:
-                          print("App is already awake.")
-                  except Exception as e:
-                      print(f"Wake button check: {e}")
+        try:
+            wake_btn = page.locator("text=Yes, get this app back up")
+            if wake_btn.count() > 0:
+                print("App was sleeping — clicking wake button...")
+                wake_btn.first.click()
+                page.wait_for_timeout(15000)
+                print("Wake button clicked. Waiting for boot...")
+            else:
+                print("App is already awake (no wake button found).")
+        except Exception as e:
+            print(f"Wake button check: {e}")
 
-                  # Wait for app to be interactive
-                  page.wait_for_timeout(5000)
-                  print(f"Page title: {page.title()}")
-                  print("Ping complete.")
+        page.wait_for_timeout(5000)
+        print(f"Page title: {page.title()}")
+        print("Ping complete.")
+        browser.close()
 
-                  browser.close()
-
-          except Exception as e:
-              print(f"Error during ping: {e}")
-              sys.exit(1)
-          EOF
+except Exception as e:
+    print(f"Error during ping: {e}")
+    sys.exit(1)
+PYEOF
 
       - name: Log result
         run: echo "Keep-alive ping completed at $(date -u)"
