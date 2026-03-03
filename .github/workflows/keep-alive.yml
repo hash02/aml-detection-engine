@@ -15,8 +15,8 @@ jobs:
           echo "Pinging AML Engine demo..."
           DEMO_URL="https://aml-detection-engine-ewxnmkbekcg8scjjes7caa.streamlit.app/"
 
-          # First try: simple HTTP ping (works if app is already awake)
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$DEMO_URL")
+          # First try: HTTP ping with redirect following
+          STATUS=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 --max-redirs 10 "$DEMO_URL" || echo "000")
           echo "HTTP status: $STATUS"
 
           if [ "$STATUS" = "200" ]; then
@@ -27,13 +27,12 @@ jobs:
           echo "App may be sleeping (status $STATUS). Trying browser wake..."
 
           # Install playwright for browser-based wake
-          pip install playwright --quiet
-          playwright install chromium --with-deps --quiet
+          python3 -m pip install playwright
+          python3 -m playwright install chromium --with-deps
 
-          # Run wake script — NO indentation so Python is happy
+          # Run wake script
           python3 << 'PYEOF'
 import sys
-import time
 
 DEMO_URL = "https://aml-detection-engine-ewxnmkbekcg8scjjes7caa.streamlit.app/"
 
@@ -45,7 +44,7 @@ try:
         page = browser.new_page()
 
         print(f"Navigating to {DEMO_URL}")
-        page.goto(DEMO_URL, timeout=60000)
+        page.goto(DEMO_URL, timeout=60000, wait_until="domcontentloaded")
 
         try:
             wake_btn = page.locator("text=Yes, get this app back up")
