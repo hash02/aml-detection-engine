@@ -32,41 +32,41 @@ jobs:
 
           # Run wake script
           python3 << 'PYEOF'
-import sys
+          import sys
 
-DEMO_URL = "https://aml-detection-engine-ewxnmkbekcg8scjjes7caa.streamlit.app/"
+          DEMO_URL = "https://aml-detection-engine-ewxnmkbekcg8scjjes7caa.streamlit.app/"
 
-try:
-    from playwright.sync_api import sync_playwright
+          try:
+              from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+              with sync_playwright() as p:
+                  browser = p.chromium.launch(headless=True)
+                  page = browser.new_page()
 
-        print(f"Navigating to {DEMO_URL}")
-        page.goto(DEMO_URL, timeout=60000, wait_until="domcontentloaded")
+                  print(f"Navigating to {DEMO_URL}")
+                  page.goto(DEMO_URL, timeout=60000, wait_until="domcontentloaded")
 
-        try:
-            wake_btn = page.locator("text=Yes, get this app back up")
-            if wake_btn.count() > 0:
-                print("App was sleeping — clicking wake button...")
-                wake_btn.first.click()
-                page.wait_for_timeout(15000)
-                print("Wake button clicked. Waiting for boot...")
-            else:
-                print("App is already awake (no wake button found).")
-        except Exception as e:
-            print(f"Wake button check: {e}")
+                  try:
+                      wake_btn = page.locator("text=Yes, get this app back up")
+                      if wake_btn.count() > 0:
+                          print("App was sleeping — clicking wake button...")
+                          wake_btn.first.click()
+                          page.wait_for_timeout(15000)
+                          print("Wake button clicked. Waiting for boot...")
+                      else:
+                          print("App is already awake (no wake button found).")
+                  except Exception as e:
+                      print(f"Wake button check: {e}")
 
-        page.wait_for_timeout(5000)
-        print(f"Page title: {page.title()}")
-        print("Ping complete.")
-        browser.close()
+                  page.wait_for_timeout(5000)
+                  print(f"Page title: {page.title()}")
+                  print("Ping complete.")
+                  browser.close()
 
-except Exception as e:
-    print(f"Error during ping: {e}")
-    sys.exit(1)
-PYEOF
+          except Exception as e:
+              print(f"Error during ping: {e}")
+              sys.exit(1)
+          PYEOF
 
       - name: Log result
         run: echo "Keep-alive ping completed at $(date -u)"
