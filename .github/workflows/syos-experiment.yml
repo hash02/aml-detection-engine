@@ -1,0 +1,73 @@
+name: SYOS Cross-Model Experiment
+
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: 'Optional notes for this run (e.g. "retry after quota reset")'
+        required: false
+        default: ''
+
+jobs:
+  run-experiment:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install anthropic google-genai
+
+      - name: Write API keys to .env
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}" > .env
+          echo "GEMINI_KEY=\"${GEMINI_API_KEY}\"" >> .env
+          echo "✅ .env written"
+
+      - name: Run SYOS cross-model experiment
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python syos_crossmodel_lean.py 2>&1 | tee experiment_run.log
+          echo "Exit code: $?"
+
+      - name: Upload results as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: syos-results-${{ github.run_number }}
+          path: |
+            syos_crossmodel_results.json
+            experiment_run.log
+          retention-days: 30
+
+      - name: Show summary
+        if: always()
+        run: |
+          echo "## SYOS Experiment Run #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f syos_crossmodel_results.json ]; then
+            echo "✅ Results file generated" >> $GITHUB_STEP_SUMMARY
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            cat syos_crossmodel_results.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps({k:v for k,v in d.items() if k in ['summary','overall_score','timestamp']}, indent=2))" 2>/dev/null || echo "Could not parse summary" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No results file — check the experiment_run.log artifact for errors" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -n "${{ github.event.inputs.notes }}" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Notes:** ${{ github.event.inputs.notes }}" >> $GITHUB_STEP_SUMMARY
+          fi
