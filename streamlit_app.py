@@ -15,7 +15,9 @@ Run locally:
 import sys
 import os
 import io
+import json
 import time
+import glob
 import pandas as pd
 import streamlit as st
 
@@ -251,6 +253,7 @@ with st.sidebar:
             "📋 Use Sample Data (Wormhole, Ronin, Lazarus)",
             "🔗 Fetch Live Blockchain Data",
             "📤 Upload My CSV",
+            "📡 Live Monitoring",
         ],
         label_visibility="collapsed",
     )
@@ -329,7 +332,10 @@ raw_df = None
 data_loaded = False
 data_label = ""
 
-if data_mode == "📋 Use Sample Data (Wormhole, Ronin, Lazarus)":
+if data_mode == "📡 Live Monitoring":
+    pass  # Handled in the monitoring section below
+
+elif data_mode == "📋 Use Sample Data (Wormhole, Ronin, Lazarus)":
     try:
         raw_df = pd.read_csv(sample_data_path)
         data_loaded = True
@@ -382,7 +388,9 @@ elif data_mode == "📤 Upload My CSV":
             st.error(f"Could not read CSV: {e}")
 
 # ── Show schema guide if no data ──────────────────────────────────────────────
-if not data_loaded:
+if data_mode == "📡 Live Monitoring":
+    pass  # Skip — monitoring page handles its own rendering
+elif not data_loaded:
     st.info("👈 Select a data source in the sidebar to run the engine.")
 
     st.markdown("### Expected CSV Schema")
@@ -598,6 +606,109 @@ with st.expander("🔬 View Raw Scored Data (all transactions)"):
         file_name="nexus_risk_results.csv",
         mime="text/csv",
     )
+
+# ── MONITORING PAGE ─────────────────────────────────────────────────────────
+if data_mode == "📡 Live Monitoring":
+    st.markdown("### Live Monitoring Dashboard")
+    st.markdown("<p style='color: #8a8aa0; font-size: 0.88rem;'>Track watched addresses, view recent alerts, and manage your watchlist.</p>", unsafe_allow_html=True)
+
+    # Load watchlist
+    watchlist_path = os.path.join(os.path.dirname(__file__), "config", "watchlist.json")
+    watchlist = {}
+    if os.path.exists(watchlist_path):
+        with open(watchlist_path, "r", encoding="utf-8") as wf:
+            watchlist = json.load(wf)
+
+    # Watchlist status
+    st.markdown("#### Watched Addresses")
+    wl_addresses = watchlist.get("addresses", [])
+    last_checked_wl = watchlist.get("last_checked", {})
+
+    if wl_addresses:
+        wl_data = []
+        for entry in wl_addresses:
+            wl_data.append({
+                "Label": entry.get("label", "Unknown"),
+                "Address": entry["address"][:20] + "...",
+                "Chain": entry.get("chain", 1),
+                "Source": entry.get("source", "etherscan"),
+                "Last Checked": last_checked_wl.get(entry["address"], "Never"),
+            })
+        st.dataframe(pd.DataFrame(wl_data), use_container_width=True, hide_index=True)
+    else:
+        st.info("No addresses in watchlist. Add addresses to config/watchlist.json")
+
+    st.divider()
+
+    # Add address form
+    st.markdown("#### Add Address to Watchlist")
+    col_addr, col_label, col_chain = st.columns([3, 2, 1])
+    with col_addr:
+        new_addr = st.text_input("Address", placeholder="0x...", key="mon_addr")
+    with col_label:
+        new_label = st.text_input("Label", placeholder="e.g., Suspicious Wallet", key="mon_label")
+    with col_chain:
+        new_chain = st.selectbox("Chain", [1, 137, 10, 8453, 42161], key="mon_chain")
+
+    if st.button("Add to Watchlist", key="mon_add"):
+        if new_addr and new_addr.startswith("0x"):
+            new_entry = {
+                "address": new_addr.strip(),
+                "label": new_label.strip() or new_addr[:10],
+                "chain": new_chain,
+                "source": "blockscout" if new_chain != 1 else "etherscan",
+            }
+            watchlist.setdefault("addresses", []).append(new_entry)
+            with open(watchlist_path, "w", encoding="utf-8") as wf:
+                json.dump(watchlist, wf, indent=2)
+            st.success(f"Added {new_label or new_addr[:10]} to watchlist")
+            st.rerun()
+        else:
+            st.warning("Enter a valid 0x address")
+
+    st.divider()
+
+    # Recent alerts
+    st.markdown("#### Recent Alerts")
+    monitoring_dir = os.path.join(os.path.dirname(__file__), "data", "monitoring")
+    if os.path.exists(monitoring_dir):
+        alert_files = sorted(glob.glob(os.path.join(monitoring_dir, "alert-*.md")), reverse=True)
+        if alert_files:
+            latest = alert_files[0]
+            with open(latest, "r", encoding="utf-8") as af:
+                alert_content = af.read()
+            st.markdown(f"**Latest report:** `{os.path.basename(latest)}`")
+
+            with st.expander("View Full Alert Report", expanded=True):
+                st.markdown(alert_content)
+
+            if len(alert_files) > 1:
+                st.markdown("**Previous reports:**")
+                for af_path in alert_files[1:5]:
+                    with st.expander(os.path.basename(af_path)):
+                        with open(af_path, "r", encoding="utf-8") as af:
+                            st.markdown(af.read())
+        else:
+            st.info("No alert reports yet. Run `python scripts/monitor.py` to generate the first one.")
+    else:
+        st.info("Monitoring directory not found. Run the monitor script first.")
+
+    # Transaction data viewer
+    if os.path.exists(monitoring_dir):
+        csv_files = sorted(glob.glob(os.path.join(monitoring_dir, "*.csv")), reverse=True)
+        if csv_files:
+            st.divider()
+            st.markdown("#### Transaction Data")
+            selected_csv = st.selectbox("Select dataset", [os.path.basename(f) for f in csv_files[:10]])
+            if selected_csv:
+                csv_path = os.path.join(monitoring_dir, selected_csv)
+                try:
+                    mon_df = pd.read_csv(csv_path)
+                    display_cols = [c for c in ["sender_id", "receiver_id", "amount", "country", "timestamp"] if c in mon_df.columns]
+                    st.dataframe(mon_df[display_cols].head(50), use_container_width=True, hide_index=True)
+                    st.caption(f"{len(mon_df)} total transactions in this dataset")
+                except Exception as e:
+                    st.error(f"Error reading CSV: {e}")
 
 # ── Footer ─────────────────────────────────────────────────────────────────────
 st.markdown("""
