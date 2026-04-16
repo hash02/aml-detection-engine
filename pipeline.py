@@ -37,13 +37,17 @@ from engine.engine_v11_blockchain import (
     format_text_report, CONFIG
 )
 
-# Telegram config
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "8337717687:AAGSnMVtqrOAe4pR9tMeU5H1sNGuOkwTbM8")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "6686810004")
+# Telegram config — opt-in. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
+# in the environment to enable on-alert notifications. When either is
+# unset, send_telegram() is a no-op.
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("TELEGRAM_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 
 def send_telegram(message: str):
-    """Send message via Telegram bot."""
+    """Send message via Telegram bot (no-op if not configured)."""
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        return
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     # Telegram limit is 4096 chars
     if len(message) > 4000:

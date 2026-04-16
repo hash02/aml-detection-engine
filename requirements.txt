@@ -4,3 +4,6 @@ scikit-learn>=1.1.0
 requests>=2.28.0
 urllib3>=1.26.0
 streamlit==1.32.0
+# Optional observability — install with:
+#   pip install sentry-sdk prometheus-client
+# The engine imports them defensively; absence is a no-op.

@@ -183,13 +183,27 @@ Edit `scripts/generate_cases.py` with your API key — fetches real transaction 
 
 ---
 
-## What's Next
+## Enterprise-Readiness Checklist
 
-- [ ] **Live demo** — Streamlit app: upload CSV or enter wallet address, get risk scores instantly
-- [ ] **GitHub Actions CI** — auto-run eval on every push, track detection rate over time
-- [ ] **GNN layer** — GraphSAGE on wallet transaction graphs (needs 5k+ labelled examples)
-- [ ] **Real-time API** — Flask endpoint, production-ready (CORS + auth)
-- [ ] **Dune Analytics integration** — real on-chain data at block level
+v12 + Phase 2 shipped:
+
+- [x] **Live demo** — Streamlit app with 26 rules + SAR-SF JSON export per alert
+- [x] **GitHub Actions CI** — ruff + pytest on Python 3.11 & 3.12
+- [x] **Live threat-intel feeds** — OFAC, MetaMask phishing, Chainalysis oracle, analyst-curated off-ramps
+- [x] **Password-gated Streamlit** — `AML_APP_PASSWORD` env var; open demo when unset
+- [x] **Append-only audit log** — SQLite, dedup by `(tx_id, input_hash)`
+- [x] **Observability** — Sentry (`SENTRY_DSN`), Prometheus (`PROMETHEUS_PORT`), structured logs
+- [x] **Backtest harness** — `scripts/backtest.py` replays cases, emits regression-safe JSON report
+- [x] **Docker image** — multi-stage, non-root, healthcheck
+
+In flight (Phase 3):
+
+- [ ] **Multi-asset** — ERC-20 tokentx ingestion, per-token amount + decimals columns
+- [ ] **Drainer-signature rule** — unlimited approval + immediate transferFrom pattern
+- [ ] **Address-poisoning rule** — zero-value lookalike (first 4 + last 4 match)
+- [ ] **Cross-chain adapters** — base class + ETH / Tron / Solana skeleton
+- [ ] **RBAC** — analyst / reviewer / admin separation on top of auth gate
+- [ ] **GNN layer** — GraphSAGE on wallet transaction graphs (aspirational)
 
 ---
 
