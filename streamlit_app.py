@@ -85,6 +85,8 @@ from engine_v11_blockchain import (
     detect_sub_threshold_tranching,
     detect_machine_cadence,
     detect_sybil_fan_in,
+    detect_drainer_signature,
+    detect_address_poisoning,
     score_transactions,
     risk_level,
     risk_emoji,
@@ -218,6 +220,9 @@ def run_engine(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     df = detect_sub_threshold_tranching(df, cfg)
     df = detect_machine_cadence(df, cfg)
     df = detect_sybil_fan_in(df, cfg)
+    # v13 detectors
+    df = detect_drainer_signature(df, cfg)
+    df = detect_address_poisoning(df, cfg)
     df = score_transactions(df, cfg)
     df["risk_level"] = df["risk_score"].apply(risk_level)
     df["risk_emoji"] = df["risk_score"].apply(risk_emoji)
@@ -255,6 +260,8 @@ def format_reasons(reasons_str: str) -> list[str]:
         "sub_threshold_tranching":         "🪙 Sub-Threshold Tranching ($8k–$10k)",
         "machine_cadence":                 "🤖 Machine Cadence (bot timing)",
         "sybil_fan_in":                    "👥 Sybil Fan-In (coordinated senders)",
+        "drainer_signature":               "🪓 Drainer Signature (multi-asset drain)",
+        "address_poisoning":               "☠️ Address Poisoning (lookalike dust)",
     }
     signals = []
     for part in reasons_str.split(";"):
@@ -669,8 +676,10 @@ if n_flagged > 0:
                 else:
                     st.caption("No specific signals decoded.")
 
-            # SAR-SF export button — one-click JSON download per alert
-            if AUTH_AVAILABLE:
+            # SAR-SF export button — gated by RBAC.can("download_sar").
+            # Any authenticated analyst qualifies; anonymous users see a
+            # disabled placeholder so the capability is still discoverable.
+            if AUTH_AVAILABLE and USER is not None and USER.can("download_sar"):
                 try:
                     sar_json = json.dumps(
                         build_sar_sf_report(row.to_dict(), {"summary": label}),

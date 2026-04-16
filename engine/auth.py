@@ -26,16 +26,47 @@ import os
 import time
 from dataclasses import dataclass
 
+# v13 RBAC — roles are a strict hierarchy: admin > reviewer > analyst.
+# Any code path that needs "at least reviewer" should check
+# `user.role_at_least("reviewer")`, never `user.role == "reviewer"`,
+# so admins are implicitly allowed everywhere a reviewer is.
+ROLE_ORDER = {"analyst": 0, "reviewer": 1, "admin": 2}
+
+# Per-role allow lists. Routes not listed are always permitted.
+PERMISSIONS = {
+    "view_alerts":       "analyst",
+    "download_sar":      "analyst",
+    "file_disposition":  "reviewer",   # escalate / dismiss / sar_filed
+    "edit_watchlist":    "admin",
+    "view_audit_log":    "reviewer",
+    "refresh_feeds":     "admin",
+}
+
 
 @dataclass(frozen=True)
 class User:
     username: str
-    role: str           # "analyst" | "reviewer"
+    role: str           # "analyst" | "reviewer" | "admin"
     authed_at: float
 
     @property
     def is_reviewer(self) -> bool:
-        return self.role == "reviewer"
+        return self.role_at_least("reviewer")
+
+    @property
+    def is_admin(self) -> bool:
+        return self.role == "admin"
+
+    def role_at_least(self, required: str) -> bool:
+        """True if this user's role is at least `required` in the hierarchy."""
+        return ROLE_ORDER.get(self.role, -1) >= ROLE_ORDER.get(required, 999)
+
+    def can(self, action: str) -> bool:
+        """Check a named permission. Unknown actions default to allow."""
+        needed = PERMISSIONS.get(action)
+        if needed is None:
+            return True
+        return self.role_at_least(needed)
 
 
 def _expected_password() -> str | None:
@@ -59,6 +90,26 @@ def _reviewer_usernames() -> set[str]:
         except Exception:
             raw = ""
     return {u.strip() for u in raw.split(",") if u.strip()}
+
+
+def _admin_usernames() -> set[str]:
+    raw = os.environ.get("AML_ADMIN_USERNAMES", "")
+    if not raw:
+        try:
+            import streamlit as st
+            raw = st.secrets.get("AML_ADMIN_USERNAMES", "") or ""  # type: ignore[attr-defined]
+        except Exception:
+            raw = ""
+    return {u.strip() for u in raw.split(",") if u.strip()}
+
+
+def _resolve_role(username: str) -> str:
+    """Admins override reviewers; otherwise fall back to analyst."""
+    if username in _admin_usernames():
+        return "admin"
+    if username in _reviewer_usernames():
+        return "reviewer"
+    return "analyst"
 
 
 def _check_password(submitted: str) -> bool:
@@ -97,8 +148,11 @@ def require_auth() -> User:
             elif not _check_password(password):
                 st.error("Invalid password")
             else:
-                role = "reviewer" if username in _reviewer_usernames() else "analyst"
-                user = User(username=username, role=role, authed_at=time.time())
+                user = User(
+                    username=username,
+                    role=_resolve_role(username),
+                    authed_at=time.time(),
+                )
                 st.session_state["_auth_user"] = user
                 st.rerun()
 
