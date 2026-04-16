@@ -1,0 +1,38 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    env:
+      FEEDS_OFFLINE: "1"   # CI does not hit the network for threat-intel
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest ruff
+
+      - name: Ruff lint
+        run: ruff check engine scripts tests
+
+      - name: Pytest
+        run: pytest tests/ -q --tb=short

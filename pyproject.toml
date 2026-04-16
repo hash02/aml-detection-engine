@@ -1,0 +1,40 @@
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+extend-exclude = [
+  "SYOS_Vault",
+  "data",
+  "dashboard",
+  "ai_layer",
+  "agent_v1.py",
+  "agent_v2.py",
+  "agent_v3.py",
+  "agent_report.py",
+  "syos_crossmodel_lean.py",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = [
+  "E501",   # line length — handled by formatter
+  "E402",   # sys.path manipulation happens before imports in several files
+  "E701",   # `if x: y` one-liners are idiomatic in streamlit_app dispatch
+  "E702",   # `x; y;` one-liners are used in narrative-building code
+  "E712",   # `== True` / `== False` are idiomatic in pandas masks
+  "B007",   # unused loop variables in df.iterrows() loops are fine
+  "B008",   # function calls in default args (pytest fixtures)
+  "UP007",  # `X | Y` vs `Optional[X]` — stylistic only
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]                             # `assert False` fine in tests
+"engine/engine_v11_blockchain.py" = ["F841"]      # legacy debug-only locals
+"scripts/blockscout_fetcher.py"   = ["F841"]      # legacy subprocess result var
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+  "ignore::DeprecationWarning",
+  "ignore::PendingDeprecationWarning",
+]
