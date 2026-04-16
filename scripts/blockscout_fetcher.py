@@ -15,9 +15,10 @@ import io
 import os
 import sys
 import time
-import requests
-import pandas as pd
 from datetime import datetime
+
+import pandas as pd
+import requests
 
 # Fix Windows console encoding
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -25,9 +26,13 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="repla
 # Add parent dir for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from etherscan_fetcher import (
-    KNOWN_MIXERS, KNOWN_BRIDGES, KNOWN_EXCHANGES,
-    EXCHANGE_COUNTRY, classify_profile, infer_country,
-    enrich_sender_stats, deduplicate, get_eth_price_usd,
+    KNOWN_BRIDGES,
+    KNOWN_MIXERS,
+    classify_profile,
+    deduplicate,
+    enrich_sender_stats,
+    get_eth_price_usd,
+    infer_country,
 )
 
 # Blockscout API base URLs per chain

@@ -16,9 +16,9 @@ Attack Pattern Encodings:
 
 import csv
 import hashlib
-import random
 import os
-from datetime import datetime, timezone, timedelta
+import random
+from datetime import UTC, datetime, timedelta
 
 random.seed(42)
 
@@ -50,7 +50,7 @@ WORMHOLE_EXPLOITER = "0x629e7Da20197a5429d30da36E77d06CdF796b71A"
 WORMHOLE_CONTRACT  = "0x3ee18B2214AFF97000D974cf647E7C347E8fa585"  # Wormhole ETH escrow
 
 # Base timestamp: Feb 2, 2022, ~18:24 UTC (block 14173128)
-t0 = datetime(2022, 2, 2, 18, 24, 0, tzinfo=timezone.utc)
+t0 = datetime(2022, 2, 2, 18, 24, 0, tzinfo=UTC)
 
 # Primary exploit transaction: contract drains 120,000 ETH to exploiter
 # This is the kill shot — one massive transaction
@@ -118,7 +118,7 @@ for i in range(6):
 
 # Tertiary: Oasis move ~1 year later (documented: Jan 24, 2023, court order)
 # This demonstrates the dormant-activation precursor pattern
-oasis_ts = datetime(2023, 1, 24, 10, 0, 0, tzinfo=timezone.utc)
+oasis_ts = datetime(2023, 1, 24, 10, 0, 0, tzinfo=UTC)
 for i in range(3):
     rows.append({
         "tx_hash":            fake_tx_hash(f"wormhole_oasis_{i}"),
@@ -169,7 +169,7 @@ wormhole_count = len(rows)
 NOMAD_BRIDGE_CONTRACT = "0x88A69B4E698A4B090DF6CF5Bd7B2D47325Ad30A3"  # Nomad bridge
 
 # 3-hour window, Aug 1 2022 ~21:32 UTC (block 15259101)
-t_nomad = datetime(2022, 8, 1, 21, 32, 0, tzinfo=timezone.utc)
+t_nomad = datetime(2022, 8, 1, 21, 32, 0, tzinfo=UTC)
 
 # Generate 80 exploiter wallets (compressed from 300+ for dataset size)
 # Each drains $100k–$2M in 1-3 transactions
@@ -179,12 +179,12 @@ for w_idx, wallet in enumerate(nomad_wallets):
     n_txns = random.randint(1, 3)
     # Wallets exploited within the 3-hour window — bot-like speed
     wallet_start = t_nomad + timedelta(minutes=random.randint(0, 180))
-    
+
     for t_idx in range(n_txns):
         drain_amount_usd = random.uniform(100_000, 2_000_000)
         drain_amount_eth = drain_amount_usd / ETH_PRICE
         tx_ts = wallet_start + timedelta(seconds=random.randint(0, 120))
-        
+
         rows.append({
             "tx_hash":            fake_tx_hash(f"nomad_{w_idx}_{t_idx}"),
             "block_number":       15259101 + random.randint(0, 800),

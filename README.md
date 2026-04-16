@@ -3,9 +3,11 @@
 > Built by a financial services professional who got tired of seeing compliance tools that didn't understand how crypto actually moves.
 
 [![Detection Rate](https://img.shields.io/badge/Detection%20Rate-94.9%25-brightgreen)](/)
-[![Rules](https://img.shields.io/badge/Rules-22-blue)](/)
+[![Rules](https://img.shields.io/badge/Rules-26-blue)](/)
 [![AI Layer](https://img.shields.io/badge/AI%20Layer-Isolation%20Forest-purple)](/)
 [![Triage](https://img.shields.io/badge/Triage-63%25%20Queue%20Reduction-orange)](/)
+[![CI](https://github.com/hash02/aml-detection-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/hash02/aml-detection-engine/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](/)
 
 ---
 
@@ -25,7 +27,7 @@ It evolved from a traditional AML rule engine (threshold + velocity) into a full
 |--------|-------|
 | Overall detection rate | **94.9%** |
 | False positive rate | **20.2%** |
-| Total rules | **22** |
+| Total rules | **26** (v12: +phish, +sub-threshold tranching, +machine cadence, +sybil fan-in) |
 | Transactions tested | **813** (644 real Etherscan + 169 synthetic forensic) |
 | Analyst queue reduction (triage) | **63%** |
 | AI-only anomalies found | **21** |
@@ -72,7 +74,7 @@ The 5.1% detection gap is structural — Euler needs block-level timestamps (not
 
 ---
 
-## The 22 Rules
+## The 26 Rules
 
 **v6 · Core Thresholds**
 `large_amount` · `velocity` · `fan_in` · `structuring`
@@ -91,6 +93,18 @@ The 5.1% detection gap is structural — Euler needs block-level timestamps (not
 
 **v11 · Advanced Patterns**
 `wash_cycle` · `smurfing` · `exit_rush` · `rapid_succession` · `high_risk_country` · `exchange_avoidance` · `layering_deep`
+
+**v12 · Live Feeds + Modern Typologies**
+`phishing_hit` (MetaMask + no-KYC offramps) · `sub_threshold_tranching` (just-under-$10k bunches) · `machine_cadence` (bot-timing signatures) · `sybil_fan_in` (airdrop-sybil / drainer collectors)
+
+### Live threat-intelligence feeds
+The sanctions and phishing lists are now refreshable from the `engine/feeds.py` loader:
+- **OFAC SDN** — 0xB10C community mirror (US Treasury virtual-currency addendum)
+- **MetaMask eth-phishing-detect** — address-level drainer list
+- **Chainalysis Sanctions Oracle** — on-chain belt-and-braces check via `CHAINALYSIS_RPC_URL`
+- **Analyst-curated** — no-KYC off-ramps, LRT drainers, mixer/bridge rosters
+
+Run `python scripts/refresh_feeds.py` (cron-ready) to pull the latest. `FEEDS_OFFLINE=1` keeps CI and air-gapped deployments happy — baselines ship in the repo.
 
 ---
 
@@ -111,7 +125,7 @@ The 5.1% detection gap is structural — Euler needs block-level timestamps (not
 ```
 aml-detection-engine/
 ├── engine/
-│   └── engine_v11_blockchain.py   # Main rule engine — 22 rules, full scoring
+│   └── engine_v11_blockchain.py   # Main rule engine — 26 rules, full scoring
 ├── ai_layer/
 │   ├── aml_ai_layer.py            # Isolation Forest + graph features
 │   └── triage_labeler.py          # Dynamic confidence scoring (rarity tiers)

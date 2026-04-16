@@ -16,8 +16,9 @@ import json
 import os
 import sys
 import time
-import pandas as pd
 from datetime import datetime
+
+import pandas as pd
 
 # Fix Windows console encoding
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -27,7 +28,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "engine"))
 
-from etherscan_fetcher import fetch_live_data, get_eth_price_usd
+from etherscan_fetcher import fetch_live_data
 from scripts.blockscout_fetcher import fetch_and_build as blockscout_fetch
 
 NOW = datetime.now()
@@ -42,7 +43,7 @@ def load_watchlist() -> dict:
     if not os.path.exists(CONFIG_PATH):
         print(f"[ERROR] Watchlist not found: {CONFIG_PATH}")
         sys.exit(1)
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+    with open(CONFIG_PATH, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -52,16 +53,29 @@ def save_watchlist(config: dict):
 
 
 def run_engine_on_df(df: pd.DataFrame, threshold: float = 0.7) -> pd.DataFrame:
-    """Run the 22-rule engine on a DataFrame and return scored results."""
+    """Run the 26-rule engine on a DataFrame and return scored results."""
     from engine_v11_blockchain import (
-        compute_features, detect_layering, detect_mixer_touch,
-        detect_bridge_hops, detect_peel_chain, detect_ofac_hit,
-        detect_flash_loan_burst, detect_coordinated_burst,
-        detect_novel_wallet_dump, detect_concentrated_inflow,
-        detect_dormant_activation, detect_wash_cycle, detect_smurfing,
-        detect_exit_rush, detect_rapid_succession, detect_high_risk_country,
-        detect_exchange_avoidance, detect_layering_deep,
-        score_transactions, risk_level, CONFIG,
+        CONFIG,
+        compute_features,
+        detect_bridge_hops,
+        detect_concentrated_inflow,
+        detect_coordinated_burst,
+        detect_dormant_activation,
+        detect_exchange_avoidance,
+        detect_exit_rush,
+        detect_flash_loan_burst,
+        detect_high_risk_country,
+        detect_layering,
+        detect_layering_deep,
+        detect_mixer_touch,
+        detect_novel_wallet_dump,
+        detect_ofac_hit,
+        detect_peel_chain,
+        detect_rapid_succession,
+        detect_smurfing,
+        detect_wash_cycle,
+        risk_level,
+        score_transactions,
     )
 
     cfg = {**CONFIG, "alert_threshold": int(threshold * 100)}
@@ -168,7 +182,7 @@ def generate_alert_report(results: list, threshold: float) -> str:
         report += "---\n\n"
 
     # Summary
-    report += f"## Summary\n\n"
+    report += "## Summary\n\n"
     report += f"- **Addresses monitored:** {len(results)}\n"
     report += f"- **Total transactions scanned:** {total_txns}\n"
     report += f"- **Total alerts:** {total_alerts}\n"
@@ -270,7 +284,7 @@ def monitor_watchlist(config: dict, api_key: str = "") -> list:
 def print_status(config: dict):
     """Print last monitoring run status."""
     print(f"\n{'='*50}")
-    print(f"AML MONITOR — Status")
+    print("AML MONITOR — Status")
     print(f"{'='*50}")
 
     addresses = config.get("addresses", [])

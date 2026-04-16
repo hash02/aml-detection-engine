@@ -51,11 +51,21 @@ from engine_v11_blockchain import (
     detect_high_risk_country,
     detect_layering_deep,
     detect_exchange_avoidance,
+    detect_phish_hit,
+    detect_sub_threshold_tranching,
+    detect_machine_cadence,
+    detect_sybil_fan_in,
     score_transactions,
     risk_level,
     risk_emoji,
     CONFIG,
 )
+
+try:
+    from feeds import feed_age_hours, FEEDS
+    FEED_STATUS_AVAILABLE = True
+except ImportError:
+    FEED_STATUS_AVAILABLE = False
 
 # ── Page config ─────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -146,7 +156,7 @@ st.markdown("""
 
 # ── Helper: run the full detection pipeline ──────────────────────────────────
 def run_engine(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
-    """Run the complete 22-rule AML detection pipeline on a DataFrame."""
+    """Run the complete 26-rule AML detection pipeline on a DataFrame."""
     df = compute_features(df, cfg)
     df, _ = detect_layering(df, cfg)
     df = detect_mixer_touch(df, cfg)
@@ -165,6 +175,11 @@ def run_engine(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     df = detect_high_risk_country(df, cfg)
     df = detect_exchange_avoidance(df, cfg)
     df = detect_layering_deep(df, cfg)
+    # v12 detectors
+    df = detect_phish_hit(df, cfg)
+    df = detect_sub_threshold_tranching(df, cfg)
+    df = detect_machine_cadence(df, cfg)
+    df = detect_sybil_fan_in(df, cfg)
     df = score_transactions(df, cfg)
     df["risk_level"] = df["risk_score"].apply(risk_level)
     df["risk_emoji"] = df["risk_score"].apply(risk_emoji)
@@ -198,6 +213,10 @@ def format_reasons(reasons_str: str) -> list[str]:
         "high_risk_jurisdiction_amplified":"🔴 High-Risk Jurisdiction (Amplified)",
         "exchange_avoidance":              "🚪 Exchange Avoidance Routing",
         "layering_deep":                   "🕳️ Deep Layering Chain (5+ hops)",
+        "phishing_hit":                    "🎣 Phishing / Drainer Address",
+        "sub_threshold_tranching":         "🪙 Sub-Threshold Tranching ($8k–$10k)",
+        "machine_cadence":                 "🤖 Machine Cadence (bot timing)",
+        "sybil_fan_in":                    "👥 Sybil Fan-In (coordinated senders)",
     }
     signals = []
     for part in reasons_str.split(";"):
@@ -423,7 +442,13 @@ if data_mode == "📋 Use Sample Data (Wormhole, Ronin, Lazarus)":
 # ── Run engine ────────────────────────────────────────────────────────────────
 cfg = {**CONFIG, "alert_threshold": alert_threshold}
 
-with st.spinner("Running 22-rule detection pipeline..."):
+# Short-circuit on empty input — avoids a downstream KeyError on `risk_level`
+# when the engine has nothing to score.
+if raw_df is None or raw_df.empty:
+    st.warning("No transactions to analyse. Upload a CSV or pick a different data source.")
+    st.stop()
+
+with st.spinner("Running 25-rule detection pipeline..."):
     try:
         # Ensure timestamp is parsed
         raw_df["timestamp"] = pd.to_datetime(raw_df["timestamp"])
@@ -442,6 +467,11 @@ with st.spinner("Running 22-rule detection pipeline..."):
         engine_ok = False
 
 if not engine_ok:
+    st.stop()
+
+# Defensive: engine can return an empty frame if every row fails validation.
+if result_df.empty:
+    st.warning("Engine ran but produced no scored transactions.")
     st.stop()
 
 # ── Summary Metrics ───────────────────────────────────────────────────────────

@@ -57,6 +57,34 @@ import requests
 import pandas as pd
 from datetime import datetime, timedelta
 from collections import defaultdict
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SHARED HTTP SESSION
+# A single session with automatic retry on transient failures (HTTP 5xx,
+# 429 rate limits, connection resets). Fixes the "fetcher just hangs or
+# dies on one flaky API call" failure mode.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _build_session() -> requests.Session:
+    s = requests.Session()
+    retry = Retry(
+        total=4,
+        backoff_factor=1.5,             # 0s, 1.5s, 3s, 6s
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset(["GET", "POST"]),
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry, pool_connections=10, pool_maxsize=10)
+    s.mount("http://",  adapter)
+    s.mount("https://", adapter)
+    s.headers.update({"User-Agent": "aml-detection-engine/1.0"})
+    return s
+
+
+SESSION = _build_session()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # KNOWN ADDRESS LISTS
@@ -146,11 +174,12 @@ HIGH_RISK_COUNTRIES = {"KP", "IR", "SY", "MM", "CU", "SD", "BY"}
 def get_eth_price_usd() -> float:
     """Get current ETH/USD price from CoinGecko (free, no API key needed)."""
     try:
-        resp = requests.get(
+        resp = SESSION.get(
             "https://api.coingecko.com/api/v3/simple/price",
             params={"ids": "ethereum", "vs_currencies": "usd"},
             timeout=10
         )
+        resp.raise_for_status()
         price = resp.json()["ethereum"]["usd"]
         print(f"[PRICE] ETH/USD: ${price:,.2f}")
         return float(price)
@@ -183,7 +212,7 @@ def fetch_blockchair(address: str, limit: int = 300) -> list:
         offset = 0
         while offset < limit:
             try:
-                resp = requests.get(
+                resp = SESSION.get(
                     BLOCKCHAIR_URL,
                     params={
                         "q": f"{role}({address})",
@@ -193,6 +222,7 @@ def fetch_blockchair(address: str, limit: int = 300) -> list:
                     },
                     timeout=20,
                 )
+                resp.raise_for_status()
                 data = resp.json()
                 batch = data.get("data", [])
                 if not batch:
@@ -215,7 +245,7 @@ def fetch_etherscan_v2(address: str, api_key: str, limit: int = 500) -> list:
     Register at etherscan.io/register — free, takes 30 seconds.
     """
     try:
-        resp = requests.get(
+        resp = SESSION.get(
             ETHERSCAN_V2_URL,
             params={
                 "chainid": 1,
@@ -229,6 +259,7 @@ def fetch_etherscan_v2(address: str, api_key: str, limit: int = 500) -> list:
             },
             timeout=15,
         )
+        resp.raise_for_status()
         data = resp.json()
         if data["status"] == "1":
             print(f"[FETCH] {address[:10]}... → {len(data['result'])} transactions (Etherscan V2)")

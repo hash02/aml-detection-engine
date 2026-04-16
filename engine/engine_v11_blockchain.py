@@ -46,9 +46,25 @@ Reads:  data/transactions_profiled.csv
 import argparse
 import json
 import os
-import pandas as pd
-from datetime import datetime, timedelta
+import sys
 from collections import defaultdict
+from datetime import datetime, timedelta
+
+import pandas as pd
+
+# Live threat-intelligence feeds (OFAC / phishing / Chainalysis oracle).
+# Import is kept tolerant so the engine still runs in minimal environments
+# (e.g. CI without internet). feeds.get_feed() itself never fails.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from feeds import check_chainalysis, get_feed
+    FEEDS_AVAILABLE = True
+except ImportError:
+    FEEDS_AVAILABLE = False
+    def get_feed(_name):  # type: ignore[misc]
+        return frozenset()
+    def check_chainalysis(_addr, _rpc=None):  # type: ignore[misc]
+        return None
 
 # ─────────────────────────────────────────────
 # CONFIG  (all v6 weights preserved, 3 new ones added)
@@ -243,6 +259,48 @@ CONFIG = {
     "deep_peel_min_hops":       5,    # 5+ hops required (vs standard 3)
     "deep_peel_window_hours":  48,    # 48-hour extended look-back
     "deep_peel_min_amount": 10_000,   # each hop > $10k
+
+    # ── v12 NEW Weights ────────────────────────────────────────────────────
+    # ABILITY 23: phishing_hit
+    #   Sender or receiver appears in the MetaMask eth-phishing-detect
+    #   addresses feed OR an analyst-curated drainer/offramp list. Not a
+    #   legal fact like OFAC, so weighted below OFAC but above most rules.
+    "w_phishing_hit":          50,
+
+    # ABILITY 24: sub_threshold_tranching
+    #   Many transactions bunched *just below* the $10k reporting limit
+    #   (e.g. 3+ txns in the $8k–$9.99k band within 24hrs from the same
+    #   sender). Distinct from structuring (which looks at any-sized
+    #   splits) — this specifically catches human-level tranche patterns.
+    "w_sub_threshold_tranching": 60,
+
+    # ABILITY 25: machine_cadence
+    #   Transactions with unnaturally uniform spacing (std-dev of inter-
+    #   arrival times < 5% of the mean) — bot or scheduled-job signature.
+    #   Humans don't maintain 3-second precision across 10 transactions.
+    "w_machine_cadence":       45,
+
+    # ABILITY 26: sybil_fan_in
+    #   Many *distinct* senders (6+) each forwarding amounts within a
+    #   tight 5% band to the same receiver inside 30 minutes. Matches
+    #   airdrop-farming sybil sweeps and drainer-network collection.
+    "w_sybil_fan_in":          55,
+
+    # v12 thresholds
+    "tranching_lower_pct":       0.80,  # > 80% of reporting limit
+    "tranching_upper_pct":       1.00,  # < 100% (i.e. just under $10k)
+    "tranching_window_hours":    24,
+    "tranching_min_count":        3,
+    "tranching_reporting_limit": 10_000,
+
+    "cadence_min_tx":            6,     # need >=6 txns to assess cadence
+    "cadence_window_hours":      12,
+    "cadence_max_cv":            0.05,  # coefficient of variation < 5% = machine
+
+    "sybil_window_minutes":      30,
+    "sybil_min_senders":         6,
+    "sybil_amount_tolerance":    0.05,  # all senders within 5% amount band
+    "sybil_min_amount":          100,   # each tx > $100
 
     "alert_threshold": 40,
 
@@ -691,20 +749,24 @@ def detect_ofac_hit(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     If you touch a sanctioned address — as sender OR receiver — it is
     an automatic Suspicious Activity Report (SAR). No score needed.
 
-    Why no score: a sanctioned address is a legal fact, not a risk signal.
-    We still add a massive weight so it dominates the score, but in a
-    production system this would be a hard block.
-
-    Real-world impact: Ronin exploiter (0x098B71...) is on the OFAC SDN list.
-    This single rule closes the Ronin detection gap from 6% → near 100%.
+    v12: the sanctions set is loaded from engine.feeds.get_feed("ofac_sdn")
+    which merges the bundled baseline with the last refreshed copy of the
+    0xB10C OFAC mirror. If an ETH RPC URL is configured
+    (`CHAINALYSIS_RPC_URL` env var), non-hits are also verified against
+    the on-chain Chainalysis Sanctions Oracle for belt-and-braces.
     """
     df = df.copy()
     df["ofac_flag"]    = False
     df["ofac_address"] = ""
 
-    sdns = {addr.lower() for addr in OFAC_SDN_ADDRESSES}
+    if df.empty:
+        print("[OFAC]       Sanctioned address matches: 0 transactions (empty input)")
+        return df
 
-    # Flag if EITHER sender OR receiver is on OFAC list
+    # Feed-backed: always union the feed with the legacy inline set so
+    # we never drop below the previous coverage if the feed is empty.
+    sdns = set(get_feed("ofac_sdn")) | {a.lower() for a in OFAC_SDN_ADDRESSES}
+
     sender_hit   = df["sender_id"].str.lower().isin(sdns)
     receiver_hit = df["receiver_id"].str.lower().isin(sdns)
     hit_mask     = sender_hit | receiver_hit
@@ -713,8 +775,206 @@ def detect_ofac_hit(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     df.loc[sender_hit,   "ofac_address"] = df.loc[sender_hit,   "sender_id"]
     df.loc[receiver_hit, "ofac_address"] = df.loc[receiver_hit, "receiver_id"]
 
-    flagged = hit_mask.sum()
+    # Optional on-chain oracle verification for un-flagged addresses
+    # Only runs if CHAINALYSIS_RPC_URL is set — zero-cost when unset.
+    rpc = os.environ.get("CHAINALYSIS_RPC_URL")
+    if rpc and FEEDS_AVAILABLE:
+        unmatched_addrs = set()
+        unmatched_addrs.update(df.loc[~sender_hit,   "sender_id"].str.lower().unique())
+        unmatched_addrs.update(df.loc[~receiver_hit, "receiver_id"].str.lower().unique())
+        # Cap the oracle call count so a huge batch doesn't hammer RPC
+        for addr in list(unmatched_addrs)[:50]:
+            is_sanctioned = check_chainalysis(addr, rpc)
+            if is_sanctioned:
+                extra = (df["sender_id"].str.lower() == addr) | (df["receiver_id"].str.lower() == addr)
+                df.loc[extra, "ofac_flag"] = True
+                df.loc[extra, "ofac_address"] = addr
+
+    flagged = df["ofac_flag"].sum()
     print(f"[OFAC]       Sanctioned address matches: {flagged} transactions")
+    return df
+
+
+def detect_phish_hit(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """
+    ABILITY 23 — PHISHING / DRAINER / NO-KYC OFF-RAMP HIT
+    ─────────────────────────────────────────────────────────────────
+    Sender or receiver appears in:
+      - MetaMask eth-phishing-detect addresses feed
+      - Analyst-curated drainer / no-KYC offramp list (feeds.lrt_offramps)
+
+    Unlike OFAC, these are not legal facts — they're crowd-sourced threat
+    intel. Weighted below OFAC but enough to push a tx into HIGH alone.
+    """
+    df = df.copy()
+    df["phish_flag"]    = False
+    df["phish_source"]  = ""
+
+    if df.empty:
+        print("[PHISH]      Phishing / drainer matches: 0 transactions (empty input)")
+        return df
+
+    phish_set  = get_feed("metamask_phish")
+    offramp    = get_feed("lrt_offramps")
+
+    def tag(addr_col: str, source_label: str, addr_set: frozenset[str]) -> None:
+        if not addr_set:
+            return
+        mask = df[addr_col].str.lower().isin(addr_set) & (~df["phish_flag"])
+        df.loc[mask, "phish_flag"]   = True
+        df.loc[mask, "phish_source"] = source_label
+
+    tag("sender_id",   "metamask_phish_sender",   phish_set)
+    tag("receiver_id", "metamask_phish_receiver", phish_set)
+    tag("sender_id",   "no_kyc_offramp_sender",   offramp)
+    tag("receiver_id", "no_kyc_offramp_receiver", offramp)
+
+    flagged = df["phish_flag"].sum()
+    print(f"[PHISH]      Phishing / drainer matches: {flagged} transactions")
+    return df
+
+
+def detect_sub_threshold_tranching(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """
+    ABILITY 24 — SUB-THRESHOLD TRANCHING
+    ─────────────────────────────────────────────────────────────────
+    Catches the classic human-operated structuring pattern: 3+ txns
+    bunched just below the $10k reporting threshold (80%–100% band)
+    from the same sender within 24 hours. Different from v6 structuring
+    (which uses a 60-min window and any-small amount) — this is the
+    slow, deliberate, reporting-aware variant.
+    """
+    df = df.copy()
+    df["tranching_flag"]  = False
+    df["tranching_count"] = 0
+
+    if df.empty:
+        print("[TRANCH]     Sub-threshold tranching: 0 transactions (empty input)")
+        return df
+
+    lower = cfg["tranching_reporting_limit"] * cfg["tranching_lower_pct"]
+    upper = cfg["tranching_reporting_limit"] * cfg["tranching_upper_pct"]
+    window = timedelta(hours=cfg["tranching_window_hours"])
+    min_count = cfg["tranching_min_count"]
+
+    band = df[(df["amount"] >= lower) & (df["amount"] < upper)]
+    # Per-sender rolling count in the band
+    counts = defaultdict(int)
+    flagged_idxs: list[int] = []
+    for sender, group in band.groupby("sender_id"):
+        group = group.sort_values("timestamp")
+        times = group["timestamp"].tolist()
+        idxs  = group.index.tolist()
+        for i, t_end in enumerate(times):
+            t_start = t_end - window
+            in_window = [j for j, t in enumerate(times[:i + 1]) if t >= t_start]
+            if len(in_window) >= min_count:
+                flagged_idxs.extend(idxs[k] for k in in_window)
+                counts[sender] = max(counts[sender], len(in_window))
+
+    flagged_idxs = list(set(flagged_idxs))
+    df.loc[flagged_idxs, "tranching_flag"] = True
+    df.loc[flagged_idxs, "tranching_count"] = df.loc[flagged_idxs, "sender_id"].map(counts).fillna(0).astype(int)
+
+    print(f"[TRANCH]     Sub-threshold tranching: {len(flagged_idxs)} transactions")
+    return df
+
+
+def detect_machine_cadence(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """
+    ABILITY 25 — MACHINE CADENCE
+    ─────────────────────────────────────────────────────────────────
+    Flags senders whose inter-arrival-time coefficient of variation is
+    below `cadence_max_cv` (default 5%). Humans don't maintain sub-5%
+    precision across many transactions; bots / scheduled jobs do.
+    """
+    df = df.copy()
+    df["cadence_flag"] = False
+    df["cadence_cv"]   = 1.0
+
+    if df.empty:
+        print("[CADENCE]    Machine cadence: 0 transactions (empty input)")
+        return df
+
+    min_tx = cfg["cadence_min_tx"]
+    window = timedelta(hours=cfg["cadence_window_hours"])
+    max_cv = cfg["cadence_max_cv"]
+
+    flagged_senders: dict[str, float] = {}
+    for sender, group in df.groupby("sender_id"):
+        if len(group) < min_tx:
+            continue
+        group = group.sort_values("timestamp")
+        # Slice to latest `window` to avoid flagging senders whose bursty
+        # block is followed by months of irregular activity
+        recent = group[group["timestamp"] >= group["timestamp"].max() - window]
+        if len(recent) < min_tx:
+            continue
+        deltas = recent["timestamp"].diff().dt.total_seconds().dropna()
+        if deltas.empty or deltas.mean() == 0:
+            continue
+        cv = deltas.std() / deltas.mean()
+        if cv < max_cv:
+            flagged_senders[sender] = cv
+
+    if flagged_senders:
+        mask = df["sender_id"].isin(flagged_senders)
+        df.loc[mask, "cadence_flag"] = True
+        df.loc[mask, "cadence_cv"]   = df.loc[mask, "sender_id"].map(flagged_senders)
+
+    print(f"[CADENCE]    Machine cadence: {len(flagged_senders)} senders flagged")
+    return df
+
+
+def detect_sybil_fan_in(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """
+    ABILITY 26 — SYBIL FAN-IN
+    ─────────────────────────────────────────────────────────────────
+    6+ distinct senders each forwarding amounts within a 5% band to the
+    same receiver inside 30 minutes. Matches airdrop-farming sybils,
+    drainer collection wallets, and exchange-account-splitting schemes.
+    Distinct from fan_in (v6: any sender count with no amount band) and
+    concentrated_inflow (v9: slower, larger amounts, wider tolerance).
+    """
+    df = df.copy()
+    df["sybil_flag"]     = False
+    df["sybil_senders"]  = 0
+
+    if df.empty:
+        print("[SYBIL]      Sybil fan-in: 0 transactions (empty input)")
+        return df
+
+    window     = timedelta(minutes=cfg["sybil_window_minutes"])
+    min_senders = cfg["sybil_min_senders"]
+    tol        = cfg["sybil_amount_tolerance"]
+    min_amount = cfg["sybil_min_amount"]
+
+    df_s = df[df["amount"] >= min_amount].sort_values("timestamp")
+    flagged_idx: list[int] = []
+    sender_counts: dict[int, int] = {}
+
+    for receiver, group in df_s.groupby("receiver_id"):
+        times = group["timestamp"].tolist()
+        for i, t_end in enumerate(times):
+            t_start = t_end - window
+            bucket = group[(group["timestamp"] >= t_start) & (group["timestamp"] <= t_end)]
+            if bucket["sender_id"].nunique() < min_senders:
+                continue
+            amt = bucket["amount"]
+            if amt.mean() == 0:
+                continue
+            # All amounts within ±tol of the bucket mean?
+            spread = (amt.max() - amt.min()) / amt.mean()
+            if spread <= tol * 2:
+                flagged_idx.extend(bucket.index.tolist())
+                for idx in bucket.index:
+                    sender_counts[idx] = bucket["sender_id"].nunique()
+
+    flagged_idx = list(set(flagged_idx))
+    df.loc[flagged_idx, "sybil_flag"]    = True
+    df.loc[flagged_idx, "sybil_senders"] = df.loc[flagged_idx].index.map(sender_counts).fillna(0).astype(int)
+
+    print(f"[SYBIL]      Sybil fan-in: {len(flagged_idx)} transactions")
     return df
 
 
@@ -1353,7 +1613,7 @@ def detect_exchange_avoidance(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     min_amt   = cfg.get("novel_dump_min_amount", 50_000)
 
     if not ex_addrs:
-        print(f"[EX AVOID]   No exchange addresses configured — skipping")
+        print("[EX AVOID]   No exchange addresses configured — skipping")
         return df
 
     df["ts"] = pd.to_datetime(df["timestamp"])
@@ -1460,7 +1720,7 @@ def score_row(row, cfg):
     if row.get("ofac_flag", False):
         # OFAC hit = automatic maximum alert, bypasses all thresholds
         score   += cfg["w_ofac_hit"]
-        reasons += f"OFAC_SDN_MATCH;"
+        reasons += "OFAC_SDN_MATCH;"
 
     if row.get("flash_flag", False):
         burst_count = row.get("flash_count", cfg["flash_min_tx_count"])
@@ -1479,7 +1739,7 @@ def score_row(row, cfg):
         age_factor  = max(0.5, 1.0 - (row.get("sender_active_days", 0) / cfg["novel_dump_max_active_days"]))
         dump_score  = cfg["w_novel_dump"] * age_factor
         score      += dump_score
-        reasons    += f"novel_wallet_dump;"
+        reasons    += "novel_wallet_dump;"
 
     if row.get("conc_inflow_flag", False):
         sender_count = row.get("conc_inflow_count", cfg["conc_inflow_min_senders"])
@@ -1551,6 +1811,27 @@ def score_row(row, cfg):
         depth_score = cfg["w_layering_deep"] * min(hop_depth / cfg["deep_peel_min_hops"], 2.0)
         score      += depth_score
         reasons    += f"layering_deep_{int(hop_depth)}_hops;"
+
+    # ── v12 rules ─────────────────────────────
+    if row.get("phish_flag", False):
+        score   += cfg["w_phishing_hit"]
+        reasons += f"phishing_hit;{row.get('phish_source', '')};"
+
+    if row.get("tranching_flag", False):
+        tranche_n     = row.get("tranching_count", cfg["tranching_min_count"])
+        tranche_score = cfg["w_sub_threshold_tranching"] * min(tranche_n / cfg["tranching_min_count"], 2.0)
+        score        += tranche_score
+        reasons      += f"sub_threshold_tranching_{int(tranche_n)};"
+
+    if row.get("cadence_flag", False):
+        score   += cfg["w_machine_cadence"]
+        reasons += f"machine_cadence_cv_{row.get('cadence_cv', 0):.3f};"
+
+    if row.get("sybil_flag", False):
+        sybil_n     = row.get("sybil_senders", cfg["sybil_min_senders"])
+        sybil_score = cfg["w_sybil_fan_in"] * min(sybil_n / cfg["sybil_min_senders"], 2.0)
+        score      += sybil_score
+        reasons    += f"sybil_fan_in_{int(sybil_n)}_senders;"
 
     score = round(score * pcfg["score_multiplier"])
     return score, reasons
@@ -1734,7 +2015,7 @@ def build_narrative(row: pd.Series, df: pd.DataFrame, cfg: dict) -> dict:
         rec_actions.append("Check if wallet appears on Chainalysis/TRM Labs mixer exposure lists")
 
     # ── 🆕 v7 Signal 8: Bridge Hop ──────────────
-    if any(f"bridge_hop_" in r for r in reasons.split(";")):
+    if any("bridge_hop_" in r for r in reasons.split(";")):
         hop_parts = [r for r in reasons.split(";") if "bridge_hop_" in r]
         hop_count = int(hop_parts[0].replace("bridge_hop_", "")) if hop_parts else cfg["bridge_hop_threshold"]
         signals.append({
@@ -1897,7 +2178,7 @@ def format_text_report(narratives: list, v6_comparison: dict = None) -> str:
             if line.strip():
                 wrapped.append(line)
             lines.extend(wrapped)
-        lines.append(f"\n  RECOMMENDED ACTIONS:")
+        lines.append("\n  RECOMMENDED ACTIONS:")
         for i, action in enumerate(n["recommended_actions"], 1):
             lines.append(f"  {i}. {action}")
 
@@ -1965,25 +2246,25 @@ def print_quick_metrics(df, narratives, metrics):
     print("  --- QUICK METRICS — NEXUS-RISK v7 BLOCKCHAIN ---")
     print("=" * 60)
     print(f"  Total : {total}  |  Flagged : {flagged}  |  Rate : {round(flagged/total*100,2)}%")
-    print(f"\n  Risk Breakdown:")
+    print("\n  Risk Breakdown:")
     print(f"  🔴 CRITICAL : {critical}")
     print(f"  🟠 HIGH     : {high}")
     print(f"  🟡 MEDIUM   : {medium}")
 
     v7_hits = metrics.get("v7_new_rule_hits", {})
-    print(f"\n  🆕 v7 Blockchain Rules:")
+    print("\n  🆕 v7 Blockchain Rules:")
     print(f"  ⛓️  mixer_touch  fired on : {v7_hits.get('mixer_touch', 0)} transactions")
     print(f"  🌉 bridge_hop   fired on : {v7_hits.get('bridge_hop', 0)} transactions")
     print(f"  🔗 peel_chain   fired on : {v7_hits.get('peel_chain', 0)} transactions")
-    print(f"\n  🆕 v8 Blockchain Rules:")
+    print("\n  🆕 v8 Blockchain Rules:")
     print(f"  💥 novel_dump          fired on : {int(df.get('novel_dump_flag', pd.Series(False)).sum())} transactions")
     print(f"  🎯 concentrated_inflow fired on : {int(df.get('conc_inflow_flag', pd.Series(False)).sum())} transactions")
-    print(f"\n  🆕 v9 Blockchain Rules:")
+    print("\n  🆕 v9 Blockchain Rules:")
     print(f"  🚨 ofac_hit            fired on : {int(df.get('ofac_flag',       pd.Series(False)).sum())} transactions")
     print(f"  ⚡ flash_loan_burst    fired on : {int(df.get('flash_flag',       pd.Series(False)).sum())} transactions")
     print(f"  🤖 coordinated_burst   fired on : {int(df.get('burst_flag',       pd.Series(False)).sum())} transactions")
 
-    print(f"\n  🆕 v11 Rules:")
+    print("\n  🆕 v11 Rules:")
     print(f"  🔄 wash_cycle          fired on : {int(df.get('wash_flag',            pd.Series(False)).sum())} transactions")
     print(f"  🧊 smurfing            fired on : {int(df.get('smurf_flag',           pd.Series(False)).sum())} transactions")
     print(f"  🚀 exit_rush           fired on : {int(df.get('exit_rush_flag',       pd.Series(False)).sum())} transactions")
@@ -1992,7 +2273,7 @@ def print_quick_metrics(df, narratives, metrics):
     print(f"  🔀 exchange_avoidance  fired on : {int(df.get('ex_avoid_flag',        pd.Series(False)).sum())} transactions")
     print(f"  ⛓️  layering_deep       fired on : {int(df.get('deep_peel_flag',       pd.Series(False)).sum())} transactions")
 
-    print(f"\n  Top 5 Alerts:")
+    print("\n  Top 5 Alerts:")
     for n in narratives[:5]:
         emoji = risk_emoji(n["risk_score"])
         v7_tag = " [v7]" if n.get("v7_blockchain_rules") else ""
@@ -2041,6 +2322,12 @@ def main():
     df = detect_high_risk_country(df, cfg)    # FATF blacklist / grey list amplifier
     df = detect_exchange_avoidance(df, cfg)   # deliberate routing around exchanges
     df = detect_layering_deep(df, cfg)        # 5+ hop extended peel chain
+
+    # ── v12 new detectors ──────────────────────────────────────────────────
+    df = detect_phish_hit(df, cfg)                # MetaMask phish + no-KYC offramps
+    df = detect_sub_threshold_tranching(df, cfg)  # deliberate sub-$10k tranching
+    df = detect_machine_cadence(df, cfg)          # bot / scheduled-job signatures
+    df = detect_sybil_fan_in(df, cfg)             # airdrop-sybil / drainer collectors
 
     df = score_transactions(df, cfg)
     narratives = generate_narratives(df, cfg)
