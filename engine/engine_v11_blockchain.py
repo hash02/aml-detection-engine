@@ -302,6 +302,28 @@ CONFIG = {
     "sybil_amount_tolerance":    0.05,  # all senders within 5% amount band
     "sybil_min_amount":          100,   # each tx > $100
 
+    # ── v13 NEW Weights ────────────────────────────────────────────────────
+    # ABILITY 27: drainer_signature
+    #   A wallet approves an unlimited allowance (or uses permit) and
+    #   within 2 minutes a distinct receiver drains multiple assets.
+    #   Matches Inferno / Angel / Pink Drainer signature flows.
+    "w_drainer_signature":     70,
+
+    # ABILITY 28: address_poisoning
+    #   A 0-value (or dust) transaction appears from an address whose
+    #   first-4 + last-4 hex chars match a recent legitimate counterparty
+    #   of the target. Classic clipboard-swap attack prelude.
+    "w_address_poisoning":     50,
+
+    # v13 thresholds
+    "drainer_window_seconds":  120,    # approval → drain within 2 min
+    "drainer_min_assets":      2,      # multi-asset drain in the window
+
+    "poison_dust_max_amount":  1.0,    # < $1 = treat as poison probe
+    "poison_window_hours":     168,    # one-week lookback for a legit pair
+    "poison_match_prefix_len": 4,      # first-4 hex match
+    "poison_match_suffix_len": 4,      # last-4 hex match
+
     "alert_threshold": 40,
 
     "input_file":  "data/transactions_profiled.csv",
@@ -975,6 +997,143 @@ def detect_sybil_fan_in(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     df.loc[flagged_idx, "sybil_senders"] = df.loc[flagged_idx].index.map(sender_counts).fillna(0).astype(int)
 
     print(f"[SYBIL]      Sybil fan-in: {len(flagged_idx)} transactions")
+    return df
+
+
+def detect_drainer_signature(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """
+    ABILITY 27 — DRAINER SIGNATURE FLOW  (v13)
+    ─────────────────────────────────────────────────────────────────
+    Canonical Inferno / Angel / Pink Drainer pattern:
+      1. Victim signs an approval (or `permit`) giving a drainer
+         contract allowance over their assets.
+      2. Within seconds-to-minutes, a distinct receiver drains several
+         assets from the victim to an aggregator wallet.
+
+    We can't see signatures in the canonical schema, but the observable
+    post-approval fingerprint is unmistakable: the sender starts bleeding
+    multiple assets to the same receiver inside a 2-minute window.
+    Requires the v13 `asset_type` / `token_contract` columns; gracefully
+    no-ops when they're absent (older inputs).
+    """
+    df = df.copy()
+    df["drainer_flag"]   = False
+    df["drainer_assets"] = 0
+
+    if df.empty or "asset_type" not in df.columns:
+        print("[DRAIN]      Drainer signature: 0 transactions (schema older than v13)")
+        return df
+
+    window      = timedelta(seconds=cfg["drainer_window_seconds"])
+    min_assets  = cfg["drainer_min_assets"]
+
+    flagged_idx: list[int] = []
+    asset_counts: dict[int, int] = {}
+
+    for (sender, receiver), grp in df.groupby(["sender_id", "receiver_id"]):
+        if len(grp) < min_assets:
+            continue
+        grp = grp.sort_values("timestamp")
+        times   = grp["timestamp"].tolist()
+        assets  = grp.get("token_contract", grp.get("token_symbol", "")).astype(str).tolist()
+        idxs    = grp.index.tolist()
+        for i in range(len(times)):
+            t_start = times[i] - window
+            # Rows in the trailing window
+            bucket_idx = [k for k in range(i + 1) if times[k] >= t_start]
+            bucket_assets = {assets[k] for k in bucket_idx if assets[k]}
+            if len(bucket_assets) >= min_assets:
+                flagged_idx.extend(idxs[k] for k in bucket_idx)
+                for k in bucket_idx:
+                    asset_counts[idxs[k]] = max(
+                        asset_counts.get(idxs[k], 0), len(bucket_assets)
+                    )
+
+    flagged_idx = list(set(flagged_idx))
+    df.loc[flagged_idx, "drainer_flag"]   = True
+    df.loc[flagged_idx, "drainer_assets"] = df.loc[flagged_idx].index.map(asset_counts).fillna(0).astype(int)
+
+    print(f"[DRAIN]      Drainer signature: {len(flagged_idx)} transactions")
+    return df
+
+
+def detect_address_poisoning(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """
+    ABILITY 28 — ADDRESS POISONING  (v13)
+    ─────────────────────────────────────────────────────────────────
+    A 0-value / dust transaction appears from a lookalike address —
+    one whose first-4 and last-4 hex characters match a known recent
+    counterparty of the target. This is the prelude to a clipboard-swap
+    attack: the victim later copy-pastes the lookalike from their tx
+    history and sends real funds to the attacker.
+
+    Detection logic:
+      1. Build the set of "legit" counterparties per wallet from any
+         non-dust, non-poison transaction in the past `poison_window_hours`.
+      2. Flag any incoming tx whose amount ≤ `poison_dust_max_amount`
+         AND whose sender's first-4 + last-4 chars match any legit
+         counterparty's — while the full address is different.
+    """
+    df = df.copy()
+    df["poison_flag"]    = False
+    df["poison_target"]  = ""
+
+    if df.empty:
+        print("[POISON]     Address poisoning: 0 transactions (empty input)")
+        return df
+
+    dust_max    = cfg["poison_dust_max_amount"]
+    window      = timedelta(hours=cfg["poison_window_hours"])
+    pre_len     = cfg["poison_match_prefix_len"]
+    suf_len     = cfg["poison_match_suffix_len"]
+
+    def _sig(addr: str) -> str:
+        a = (addr or "").lower()
+        if not a.startswith("0x") or len(a) < 2 + pre_len + suf_len:
+            return ""
+        return a[2:2 + pre_len] + "|" + a[-suf_len:]
+
+    df["_sig"] = df["sender_id"].map(_sig)
+
+    # Build per-receiver legit-counterparty signature map
+    non_dust = df[df["amount"] > dust_max]
+    legit: dict[str, dict[str, str]] = {}  # receiver → {sig: full_address}
+    for _, r in non_dust.iterrows():
+        rcv = str(r["receiver_id"]).lower()
+        snd = str(r["sender_id"]).lower()
+        sig = _sig(snd)
+        if not sig:
+            continue
+        legit.setdefault(rcv, {})[sig] = snd
+
+    dust = df[df["amount"] <= dust_max]
+    flagged_idx: list[int] = []
+    targets: dict[int, str] = {}
+    for idx, r in dust.iterrows():
+        rcv = str(r["receiver_id"]).lower()
+        snd = str(r["sender_id"]).lower()
+        sig = _sig(snd)
+        if not sig:
+            continue
+        # Only look at legit counterparties from the trailing window
+        cohort = legit.get(rcv, {})
+        if sig in cohort and cohort[sig] != snd:
+            # Time gate: only flag if the legit pairing existed within the window
+            prior = non_dust[
+                (non_dust["receiver_id"].str.lower() == rcv) &
+                (non_dust["sender_id"].str.lower() == cohort[sig]) &
+                (non_dust["timestamp"] >= r["timestamp"] - window) &
+                (non_dust["timestamp"] <= r["timestamp"])
+            ]
+            if not prior.empty:
+                flagged_idx.append(idx)
+                targets[idx] = cohort[sig]
+
+    df.loc[flagged_idx, "poison_flag"]   = True
+    df.loc[flagged_idx, "poison_target"] = df.loc[flagged_idx].index.map(targets).fillna("")
+    df = df.drop(columns=["_sig"])
+
+    print(f"[POISON]     Address poisoning: {len(flagged_idx)} transactions")
     return df
 
 
@@ -1833,6 +1992,18 @@ def score_row(row, cfg):
         score      += sybil_score
         reasons    += f"sybil_fan_in_{int(sybil_n)}_senders;"
 
+    # ── v13 rules ─────────────────────────────
+    if row.get("drainer_flag", False):
+        n_assets = row.get("drainer_assets", cfg["drainer_min_assets"])
+        drain_score = cfg["w_drainer_signature"] * min(n_assets / cfg["drainer_min_assets"], 2.0)
+        score     += drain_score
+        reasons   += f"drainer_signature_{int(n_assets)}_assets;"
+
+    if row.get("poison_flag", False):
+        score   += cfg["w_address_poisoning"]
+        target   = row.get("poison_target", "")
+        reasons += f"address_poisoning;{target[:12] if target else ''};"
+
     score = round(score * pcfg["score_multiplier"])
     return score, reasons
 
@@ -2328,6 +2499,10 @@ def main():
     df = detect_sub_threshold_tranching(df, cfg)  # deliberate sub-$10k tranching
     df = detect_machine_cadence(df, cfg)          # bot / scheduled-job signatures
     df = detect_sybil_fan_in(df, cfg)             # airdrop-sybil / drainer collectors
+
+    # ── v13 new detectors ──────────────────────────────────────────────────
+    df = detect_drainer_signature(df, cfg)        # Inferno/Angel drainer flow
+    df = detect_address_poisoning(df, cfg)        # 0-value lookalike attacks
 
     df = score_transactions(df, cfg)
     narratives = generate_narratives(df, cfg)

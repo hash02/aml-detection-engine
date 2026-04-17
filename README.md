@@ -3,7 +3,7 @@
 > Built by a financial services professional who got tired of seeing compliance tools that didn't understand how crypto actually moves.
 
 [![Detection Rate](https://img.shields.io/badge/Detection%20Rate-94.9%25-brightgreen)](/)
-[![Rules](https://img.shields.io/badge/Rules-26-blue)](/)
+[![Rules](https://img.shields.io/badge/Rules-28-blue)](/)
 [![AI Layer](https://img.shields.io/badge/AI%20Layer-Isolation%20Forest-purple)](/)
 [![Triage](https://img.shields.io/badge/Triage-63%25%20Queue%20Reduction-orange)](/)
 [![CI](https://github.com/hash02/aml-detection-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/hash02/aml-detection-engine/actions/workflows/ci.yml)
@@ -96,6 +96,9 @@ The 5.1% detection gap is structural — Euler needs block-level timestamps (not
 
 **v12 · Live Feeds + Modern Typologies**
 `phishing_hit` (MetaMask + no-KYC offramps) · `sub_threshold_tranching` (just-under-$10k bunches) · `machine_cadence` (bot-timing signatures) · `sybil_fan_in` (airdrop-sybil / drainer collectors)
+
+**v13 · Drainer + Multi-Asset**
+`drainer_signature` (Inferno / Angel drainer pattern — approval + multi-asset drain) · `address_poisoning` (0-value lookalike first-4/last-4 match)
 
 ### Live threat-intelligence feeds
 The sanctions and phishing lists are now refreshable from the `engine/feeds.py` loader:
@@ -196,14 +199,18 @@ v12 + Phase 2 shipped:
 - [x] **Backtest harness** — `scripts/backtest.py` replays cases, emits regression-safe JSON report
 - [x] **Docker image** — multi-stage, non-root, healthcheck
 
-In flight (Phase 3):
+Phase 3 shipped:
 
-- [ ] **Multi-asset** — ERC-20 tokentx ingestion, per-token amount + decimals columns
-- [ ] **Drainer-signature rule** — unlimited approval + immediate transferFrom pattern
-- [ ] **Address-poisoning rule** — zero-value lookalike (first 4 + last 4 match)
-- [ ] **Cross-chain adapters** — base class + ETH / Tron / Solana skeleton
-- [ ] **RBAC** — analyst / reviewer / admin separation on top of auth gate
-- [ ] **GNN layer** — GraphSAGE on wallet transaction graphs (aspirational)
+- [x] **Multi-asset** — ERC-20 tokentx ingestion, per-token amount + decimals columns
+- [x] **Drainer-signature rule** — multi-asset drain inside a 2-min window
+- [x] **Address-poisoning rule** — dust + first-4/last-4 lookalike match
+- [x] **Cross-chain adapters** — base class + ETH adapter + Tron / Solana stubs
+- [x] **RBAC** — 3-tier hierarchy (admin > reviewer > analyst) + per-action permission map
+
+Still aspirational:
+
+- [ ] **Tron / Solana full adapters** — currently stubs; SPL / TRC20 decoding TODO
+- [ ] **GNN layer** — GraphSAGE on wallet transaction graphs
 
 ---
 
