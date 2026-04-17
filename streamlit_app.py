@@ -12,22 +12,52 @@ Run locally:
     streamlit run streamlit_app.py
 """
 
-import sys
-import os
+import glob
 import io
 import json
+import os
+import sys
 import time
-import glob
+
 import pandas as pd
 import streamlit as st
 
 # ── Import live fetcher ──────────────────────────────────────────────────────
 sys.path.insert(0, os.path.dirname(__file__))
 try:
-    from etherscan_fetcher import fetch_live_data, DEFAULT_SEEDS
+    from etherscan_fetcher import DEFAULT_SEEDS, fetch_live_data
     LIVE_FEED_AVAILABLE = True
 except ImportError:
     LIVE_FEED_AVAILABLE = False
+
+# ── Observability + auth + audit (all env-gated / fail-open) ────────────────
+try:
+    from engine.observability import (
+        alerts_raised_total,
+        engine_latency_seconds,
+        init_observability,
+        rules_fired_total,
+        txs_processed_total,
+    )
+    init_observability()
+except Exception:  # noqa: BLE001 — observability must never crash the app
+    def init_observability(): pass
+    def rules_fired_total(_rule, _n=1): pass
+    class _Null:
+        def inc(self, *_, **__): pass
+        def observe(self, *_, **__): pass
+        def labels(self, *_, **__): return self
+    alerts_raised_total    = _Null()
+    engine_latency_seconds = _Null()
+    txs_processed_total    = _Null()
+
+try:
+    from engine.audit import AuditLog
+    from engine.auth import current_user, require_auth
+    from engine.sar_sf import build_sar_sf_report
+    AUTH_AVAILABLE = True
+except ImportError:
+    AUTH_AVAILABLE = False
 
 # ── Import the engine (all pure functions, no file I/O needed) ──────────────
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "engine"))
@@ -55,6 +85,8 @@ from engine_v11_blockchain import (
     detect_sub_threshold_tranching,
     detect_machine_cadence,
     detect_sybil_fan_in,
+    detect_drainer_signature,
+    detect_address_poisoning,
     score_transactions,
     risk_level,
     risk_emoji,
@@ -62,10 +94,18 @@ from engine_v11_blockchain import (
 )
 
 try:
-    from feeds import feed_age_hours, FEEDS
+    from feeds import FEEDS, feed_age_hours
     FEED_STATUS_AVAILABLE = True
 except ImportError:
     FEED_STATUS_AVAILABLE = False
+
+# ── Auth gate + audit log (both fail-open to the public demo) ───────────────
+if AUTH_AVAILABLE:
+    USER = require_auth()
+    AUDIT = AuditLog(os.environ.get("AML_AUDIT_DB", "data/audit.db"))
+else:
+    USER = None
+    AUDIT = None
 
 # ── Page config ─────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -180,6 +220,9 @@ def run_engine(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     df = detect_sub_threshold_tranching(df, cfg)
     df = detect_machine_cadence(df, cfg)
     df = detect_sybil_fan_in(df, cfg)
+    # v13 detectors
+    df = detect_drainer_signature(df, cfg)
+    df = detect_address_poisoning(df, cfg)
     df = score_transactions(df, cfg)
     df["risk_level"] = df["risk_score"].apply(risk_level)
     df["risk_emoji"] = df["risk_score"].apply(risk_emoji)
@@ -217,6 +260,8 @@ def format_reasons(reasons_str: str) -> list[str]:
         "sub_threshold_tranching":         "🪙 Sub-Threshold Tranching ($8k–$10k)",
         "machine_cadence":                 "🤖 Machine Cadence (bot timing)",
         "sybil_fan_in":                    "👥 Sybil Fan-In (coordinated senders)",
+        "drainer_signature":               "🪓 Drainer Signature (multi-asset drain)",
+        "address_poisoning":               "☠️ Address Poisoning (lookalike dust)",
     }
     signals = []
     for part in reasons_str.split(";"):
@@ -448,7 +493,8 @@ if raw_df is None or raw_df.empty:
     st.warning("No transactions to analyse. Upload a CSV or pick a different data source.")
     st.stop()
 
-with st.spinner("Running 25-rule detection pipeline..."):
+_pipeline_start = time.perf_counter()
+with st.spinner("Running 26-rule detection pipeline..."):
     try:
         # Ensure timestamp is parsed
         raw_df["timestamp"] = pd.to_datetime(raw_df["timestamp"])
@@ -464,7 +510,14 @@ with st.spinner("Running 25-rule detection pipeline..."):
         st.error(f"Engine error: {e}")
         import traceback
         st.code(traceback.format_exc())
+        try:
+            from engine.observability import capture_exception
+            capture_exception(e)
+        except Exception:  # noqa: BLE001
+            pass
         engine_ok = False
+
+engine_latency_seconds.observe(time.perf_counter() - _pipeline_start)
 
 if not engine_ok:
     st.stop()
@@ -481,6 +534,17 @@ n_flagged  = len(flagged)
 n_critical = len(flagged[flagged["risk_level"] == "CRITICAL"])
 n_high     = len(flagged[flagged["risk_level"] == "HIGH"])
 n_medium   = len(flagged[flagged["risk_level"] == "MEDIUM"])
+
+# Metrics + audit (both best-effort, never block the UI) ──────────────────
+txs_processed_total.inc(total)
+for lvl, n in (("CRITICAL", n_critical), ("HIGH", n_high), ("MEDIUM", n_medium)):
+    if n:
+        alerts_raised_total.labels(risk_level=lvl).inc(n)
+if AUDIT is not None:
+    try:
+        AUDIT.record_batch(result_df)
+    except Exception:  # noqa: BLE001
+        pass
 detect_rate = f"{(n_flagged / total * 100):.1f}%" if total > 0 else "—"
 
 st.markdown(f"<p style='color: #505068; font-size: 0.82rem; margin-bottom: 1rem;'>Engine run complete · {data_label}</p>", unsafe_allow_html=True)
@@ -611,6 +675,25 @@ if n_flagged > 0:
                         st.markdown(f"<div style='font-size: 0.82rem; padding: 0.2rem 0; color: #ededf5;'>{sig}</div>", unsafe_allow_html=True)
                 else:
                     st.caption("No specific signals decoded.")
+
+            # SAR-SF export button — gated by RBAC.can("download_sar").
+            # Any authenticated analyst qualifies; anonymous users see a
+            # disabled placeholder so the capability is still discoverable.
+            if AUTH_AVAILABLE and USER is not None and USER.can("download_sar"):
+                try:
+                    sar_json = json.dumps(
+                        build_sar_sf_report(row.to_dict(), {"summary": label}),
+                        indent=2, default=str,
+                    )
+                    st.download_button(
+                        "⬇️ Download SAR-SF JSON",
+                        sar_json,
+                        file_name=f"sar_sf_{row.get('id', 'alert')}.json",
+                        mime="application/json",
+                        key=f"sar_dl_{idx}",
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
 
         if i >= 19:  # Cap at 20 expanded rows for performance
             st.caption(f"... and {len(sorted_flagged) - 20} more flagged transactions.")

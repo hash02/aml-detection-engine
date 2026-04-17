@@ -3,7 +3,7 @@
 > Built by a financial services professional who got tired of seeing compliance tools that didn't understand how crypto actually moves.
 
 [![Detection Rate](https://img.shields.io/badge/Detection%20Rate-94.9%25-brightgreen)](/)
-[![Rules](https://img.shields.io/badge/Rules-26-blue)](/)
+[![Rules](https://img.shields.io/badge/Rules-28-blue)](/)
 [![AI Layer](https://img.shields.io/badge/AI%20Layer-Isolation%20Forest-purple)](/)
 [![Triage](https://img.shields.io/badge/Triage-63%25%20Queue%20Reduction-orange)](/)
 [![CI](https://github.com/hash02/aml-detection-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/hash02/aml-detection-engine/actions/workflows/ci.yml)
@@ -97,6 +97,9 @@ The 5.1% detection gap is structural — Euler needs block-level timestamps (not
 **v12 · Live Feeds + Modern Typologies**
 `phishing_hit` (MetaMask + no-KYC offramps) · `sub_threshold_tranching` (just-under-$10k bunches) · `machine_cadence` (bot-timing signatures) · `sybil_fan_in` (airdrop-sybil / drainer collectors)
 
+**v13 · Drainer + Multi-Asset**
+`drainer_signature` (Inferno / Angel drainer pattern — approval + multi-asset drain) · `address_poisoning` (0-value lookalike first-4/last-4 match)
+
 ### Live threat-intelligence feeds
 The sanctions and phishing lists are now refreshable from the `engine/feeds.py` loader:
 - **OFAC SDN** — 0xB10C community mirror (US Treasury virtual-currency addendum)
@@ -183,13 +186,31 @@ Edit `scripts/generate_cases.py` with your API key — fetches real transaction 
 
 ---
 
-## What's Next
+## Enterprise-Readiness Checklist
 
-- [ ] **Live demo** — Streamlit app: upload CSV or enter wallet address, get risk scores instantly
-- [ ] **GitHub Actions CI** — auto-run eval on every push, track detection rate over time
-- [ ] **GNN layer** — GraphSAGE on wallet transaction graphs (needs 5k+ labelled examples)
-- [ ] **Real-time API** — Flask endpoint, production-ready (CORS + auth)
-- [ ] **Dune Analytics integration** — real on-chain data at block level
+v12 + Phase 2 shipped:
+
+- [x] **Live demo** — Streamlit app with 26 rules + SAR-SF JSON export per alert
+- [x] **GitHub Actions CI** — ruff + pytest on Python 3.11 & 3.12
+- [x] **Live threat-intel feeds** — OFAC, MetaMask phishing, Chainalysis oracle, analyst-curated off-ramps
+- [x] **Password-gated Streamlit** — `AML_APP_PASSWORD` env var; open demo when unset
+- [x] **Append-only audit log** — SQLite, dedup by `(tx_id, input_hash)`
+- [x] **Observability** — Sentry (`SENTRY_DSN`), Prometheus (`PROMETHEUS_PORT`), structured logs
+- [x] **Backtest harness** — `scripts/backtest.py` replays cases, emits regression-safe JSON report
+- [x] **Docker image** — multi-stage, non-root, healthcheck
+
+Phase 3 shipped:
+
+- [x] **Multi-asset** — ERC-20 tokentx ingestion, per-token amount + decimals columns
+- [x] **Drainer-signature rule** — multi-asset drain inside a 2-min window
+- [x] **Address-poisoning rule** — dust + first-4/last-4 lookalike match
+- [x] **Cross-chain adapters** — base class + ETH adapter + Tron / Solana stubs
+- [x] **RBAC** — 3-tier hierarchy (admin > reviewer > analyst) + per-action permission map
+
+Still aspirational:
+
+- [ ] **Tron / Solana full adapters** — currently stubs; SPL / TRC20 decoding TODO
+- [ ] **GNN layer** — GraphSAGE on wallet transaction graphs
 
 ---
 
