@@ -708,6 +708,42 @@ if n_flagged > 0:
         label = f"{emoji} **{level}** · Score: {score} · ${amount:,.0f} · {sender[:20]}..."
 
         with st.expander(label):
+            # Subject enrichment — a one-line badge for each side of the
+            # transaction so analysts can tell an exchange from a mixer
+            # at a glance without leaving the UI.
+            try:
+                from engine.enrichment import default_resolver
+                resolver = default_resolver()
+                enr_sender   = resolver.lookup(str(row["sender_id"]))
+                enr_receiver = resolver.lookup(str(row["receiver_id"]))
+                _CAT_COLOUR = {
+                    "sanctioned":   "#ef4444",
+                    "phishing":     "#ef4444",
+                    "mixer":        "#f97316",
+                    "bridge":       "#eab308",
+                    "exchange":     "#22c55e",
+                    "lrt_offramp":  "#f97316",
+                    "notable":      "#3b82f6",
+                    "labeled":      "#8b6cf7",
+                    "unknown":      "#505068",
+                }
+                def _chip(e):
+                    col = _CAT_COLOUR.get(e.category, "#505068")
+                    return (f"<span style='background:{col}22; color:{col}; "
+                            f"border:1px solid {col}; padding:0.15rem 0.55rem; "
+                            f"border-radius:6px; font-size:0.72rem;'>"
+                            f"{e.category} · {e.label[:40]}</span>")
+                if enr_sender.category != "unknown" or enr_receiver.category != "unknown":
+                    st.markdown(
+                        f"<div style='margin-bottom:0.5rem; font-size:0.78rem;'>"
+                        f"<strong style='color:#8a8aa0;'>Sender:</strong> {_chip(enr_sender)}"
+                        f" &nbsp;&nbsp; "
+                        f"<strong style='color:#8a8aa0;'>Receiver:</strong> {_chip(enr_receiver)}"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+            except Exception:  # noqa: BLE001 — enrichment is best-effort
+                pass
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown(f"""
