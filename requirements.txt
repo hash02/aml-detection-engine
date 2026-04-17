@@ -7,3 +7,7 @@ streamlit==1.32.0
 # Optional observability — install with:
 #   pip install sentry-sdk prometheus-client
 # The engine imports them defensively; absence is a no-op.
+#
+# Optional FastAPI sidecar (api.py) — install with:
+#   pip install fastapi uvicorn pydantic
+# Only required if you run `make api` / `uvicorn api:app`.
