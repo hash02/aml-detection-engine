@@ -233,6 +233,14 @@ def run_engine(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     df["risk_level"] = df["risk_score"].apply(risk_level)
     df["risk_emoji"] = df["risk_score"].apply(risk_emoji)
 
+    # Graph topology features — feeds the ML layer. Best-effort; if
+    # networkx isn't installed, columns are zero-filled.
+    try:
+        from engine.graph_features import enrich as graph_enrich
+        df = graph_enrich(df)
+    except Exception:  # noqa: BLE001
+        pass
+
     # Layer 2 — unsupervised anomaly score (Isolation Forest).
     try:
         from engine.ml_anomaly import fit_predict as ml_fit

@@ -46,7 +46,7 @@ import pandas as pd
 
 log = logging.getLogger(__name__)
 
-MODEL_VERSION = "1.0.0"
+MODEL_VERSION = "1.1.0"   # v13: graph features added
 RANDOM_STATE  = 42
 N_ESTIMATORS  = 200
 CONTAMINATION = 0.1
@@ -58,6 +58,12 @@ FEATURES = [
     "fan_in_count",
     "hour_of_day",
     "day_of_week",
+    # v13 graph features — gracefully 0.0 when networkx isn't installed
+    "graph_out_degree",
+    "graph_in_degree",
+    "graph_passthrough",
+    "graph_unique_ratio",
+    "graph_betweenness",
 ]
 MIN_ROWS_FOR_FIT = 20   # below this, anomaly scores default to 0 (no-op)
 
@@ -76,6 +82,12 @@ def _prepare_features(df: pd.DataFrame) -> pd.DataFrame:
     ts = pd.to_datetime(df.get("timestamp", pd.Series(pd.NaT, index=df.index)), errors="coerce")
     out["hour_of_day"] = ts.dt.hour.fillna(0).astype(int)
     out["day_of_week"] = ts.dt.dayofweek.fillna(0).astype(int)
+
+    # v13 graph features — pulled from enrich() output, zero-filled otherwise
+    for col in ("graph_out_degree", "graph_in_degree", "graph_passthrough",
+                "graph_unique_ratio", "graph_betweenness"):
+        out[col] = df.get(col, pd.Series(0.0, index=df.index)).fillna(0.0).astype(float)
+
     return out[FEATURES]
 
 
