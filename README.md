@@ -27,7 +27,7 @@ It evolved from a traditional AML rule engine (threshold + velocity) into a full
 |--------|-------|
 | Overall detection rate | **94.9%** |
 | False positive rate | **20.2%** |
-| Total rules | **26** (v12: +phish, +sub-threshold tranching, +machine cadence, +sybil fan-in) |
+| Total rules | **28** (v12: +phish, +sub-threshold tranching, +machine cadence, +sybil fan-in) |
 | Transactions tested | **813** (644 real Etherscan + 169 synthetic forensic) |
 | Analyst queue reduction (triage) | **63%** |
 | AI-only anomalies found | **21** |
@@ -49,6 +49,26 @@ It evolved from a traditional AML rule engine (threshold + velocity) into a full
 | ETH Foundation (control) | Legitimate institutional | **20.0% FP** | Grant distribution pattern |
 
 The 5.1% detection gap is structural — Euler needs block-level timestamps (not available in hourly Etherscan data), Ronin's intermediaries aren't OFAC-listed. More rules won't close this gap. Better data sources will.
+
+
+---
+
+## Live Threat Intelligence
+
+Every 24 hours this engine pulls from three independent sources so the detection surface stays current without manual updates. Nothing is hardcoded past the initial fallback baseline.
+
+| Feed | Source | Purpose |
+|---|---|---|
+| OFAC SDN (ethereum) | [0xB10C/ofac-sanctioned-digital-currency-addresses](https://github.com/0xB10C/ofac-sanctioned-digital-currency-addresses) (MIT) | US Treasury sanctions list |
+| MetaMask eth-phishing-detect | [MetaMask/eth-phishing-detect](https://github.com/MetaMask/eth-phishing-detect) (MIT) | Scam and phishing addresses |
+| Chainalysis Sanctions Oracle | On-chain contract, live lookup | Regulatory belt-and-braces |
+
+Latest snapshot lives at [](./addresses/) with SHA256 checksums in [](./addresses/MANIFEST.json). Downstream consumers (like [aml-roaster](https://github.com/hash02/aml-roaster)) pull this directly on their own schedule.
+
+**What this means in practice:** a new OFAC listing ships into detection within 24 hours with zero human involvement. The engine is not static. If you are showing this to a compliance team, they will care about this.
+
+[![Last refresh](https://img.shields.io/github/actions/workflow/status/hash02/aml-detection-engine/refresh-addresses-daily.yml?branch=main&label=threat%20feeds&logo=github)](https://github.com/hash02/aml-detection-engine/actions/workflows/refresh-addresses-daily.yml)
+
 
 ---
 
