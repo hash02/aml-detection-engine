@@ -117,6 +117,37 @@ _CHANNELS = (
 )
 
 
+# Severity routing — which channels fire at which level. `*` means "all".
+# Override via `AML_NOTIFY_ROUTING` env var as a JSON object, e.g.
+#   {"CRITICAL": ["telegram", "slack"], "WARN": ["slack"], "*": ["webhook"]}
+# Absent env var → every level fans out to every configured channel.
+def _parse_routing() -> dict[str, set[str]]:
+    raw = os.environ.get("AML_NOTIFY_ROUTING", "")
+    if not raw:
+        return {}
+    try:
+        cfg = json.loads(raw)
+        return {k.upper(): set(v) for k, v in cfg.items()}
+    except (json.JSONDecodeError, AttributeError, TypeError) as e:
+        log.warning("notifier: bad AML_NOTIFY_ROUTING (%s), ignoring", e)
+        return {}
+
+
+def _channels_for_level(level: str) -> set[str] | None:
+    """Return the set of channel names allowed for this level, or None
+    to mean "no restriction — send to every configured channel"."""
+    routing = _parse_routing()
+    if not routing:
+        return None
+    lvl = level.upper()
+    if lvl in routing:
+        return routing[lvl]
+    if "*" in routing:
+        return routing["*"]
+    # Explicit routing but level not listed → suppress
+    return set()
+
+
 # ── Public API ──────────────────────────────────────────────────────
 
 def configured_channels() -> list[str]:
@@ -143,7 +174,11 @@ def notify(
     skipped: list[str] = []
     failed: list[tuple[str, str]] = []
 
+    allowed = _channels_for_level(level)
     for name, fn, env in _CHANNELS:
+        if allowed is not None and name not in allowed:
+            skipped.append(name)
+            continue
         has_cfg = bool(os.environ.get(env))
         if name == "telegram" and not has_cfg and os.environ.get("TELEGRAM_TOKEN"):
             has_cfg = True  # legacy env var
