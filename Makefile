@@ -1,7 +1,7 @@
 # AML Detection Engine — developer DX
 # Every target is idempotent and self-contained. `make help` lists them.
 
-.PHONY: help install test test-fast lint format backtest feeds run api docker docker-run clean
+.PHONY: help install test test-fast lint format backtest bench feeds rules rules-check tune run api docker docker-run compose-up compose-down clean
 
 PY       ?= python3
 PYTEST   ?= $(PY) -m pytest
@@ -29,8 +29,26 @@ format:  ## Ruff format + autofix
 backtest:  ## Replay bundled sample data and emit JSON report
 	FEEDS_OFFLINE=1 $(PY) scripts/backtest.py --dir data --out backtest_report.json
 
+bench:  ## Benchmark engine latency + throughput
+	FEEDS_OFFLINE=1 $(PY) scripts/benchmark.py --sizes 100 1000 --repeats 3 --out bench_report.json
+
 feeds:  ## Pull the latest threat-intel feeds
 	$(PY) scripts/refresh_feeds.py
+
+rules:  ## Regenerate the rule catalogue (docs/RULES.md)
+	$(PY) scripts/gen_rule_catalog.py
+
+rules-check:  ## Fail if docs/RULES.md is stale vs. the engine
+	$(PY) scripts/gen_rule_catalog.py --check
+
+tune:  ## Print threshold-tuning suggestions from disposition history
+	$(PY) -c "from engine.tuning import suggest; [print(s) for s in suggest()]"
+
+compose-up:  ## Bring up the production compose stack
+	docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d
+
+compose-down:  ## Tear it down
+	docker compose -f deploy/docker-compose.prod.yml down
 
 run:  ## Run Streamlit locally on :8501
 	streamlit run streamlit_app.py --server.port=8501
