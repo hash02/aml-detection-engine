@@ -1,0 +1,11 @@
+{
+  "feed": "lrt_offramps",
+  "updated_at": 1776417022.7573352,
+  "count": 3,
+  "source": "engine/feeds.py BASELINE_LRT_OFFRAMPS",
+  "addresses": [
+    "0x0000db5c8b030ae20308ac975898e09741e70000",
+    "0x077d360f11d220e4d5d831430c81c26c9be7c4a4",
+    "0x4e5b2e1dc63f6b91cb6cd759936495434c7e972f"
+  ]
+}

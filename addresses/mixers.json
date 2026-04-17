@@ -1,0 +1,16 @@
+{
+  "feed": "mixers",
+  "updated_at": 1776417022.7570207,
+  "count": 8,
+  "source": "engine/feeds.py BASELINE_MIXERS",
+  "addresses": [
+    "0x12d66f87a04a9e220c9d35925b72aca3ca8c78e2",
+    "0x2717c5e28cf931547b621a5dddb772ab6a35b701",
+    "0x47ce0c6ed5b0ce3d3a51fdb1c52dc66a7c3c2936",
+    "0x722122df12d4e14e13ac3b6895a86e84145b6967",
+    "0x7f367cc41522ce07553e823bf3be79a889debe1b",
+    "0x910cbd523d972eb0a6f4cae4618ad62622b39dbf",
+    "0xa160cdab225685da1d56aa342ad8841c3b53f291",
+    "0xd90e2f925da726b50c4ed8d0fb90ad053324f31b"
+  ]
+}
