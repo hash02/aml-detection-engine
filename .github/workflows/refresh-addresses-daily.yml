@@ -1,0 +1,96 @@
+name: Refresh threat feeds daily
+
+on:
+  schedule:
+    # 02:00 UTC daily. Upstream OFAC / MetaMask feeds update asynchronously.
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install minimal deps
+        run: pip install requests pandas
+
+      - name: Refresh feeds
+        run: |
+          python scripts/refresh_feeds.py
+
+      - name: Populate addresses from feeds + MANIFEST
+        run: |
+          python - <<'PY'
+          import json, time, hashlib
+          from pathlib import Path
+          FEEDS = Path('data/feeds')
+          ADDR = Path('addresses')
+          ADDR.mkdir(parents=True, exist_ok=True)
+          MAPPING = {
+              'ofac_sdn':       ('ofac.json',     'https://raw.githubusercontent.com/0xB10C/ofac-sanctioned-digital-currency-addresses'),
+              'metamask_phish': ('phishing.json', 'https://github.com/MetaMask/eth-phishing-detect'),
+              'mixers':         ('mixers.json',   'engine/feeds.py BASELINE_MIXERS'),
+              'bridges':        ('bridges.json',  'engine/feeds.py BASELINE_BRIDGES'),
+              'lrt_offramps':   ('offramps.json', 'engine/feeds.py BASELINE_LRT_OFFRAMPS'),
+          }
+          for feed_name, (addr_name, source) in MAPPING.items():
+              src = FEEDS / f'{feed_name}.json'
+              if not src.exists(): continue
+              data = json.loads(src.read_text())
+              out = {
+                  'feed': feed_name,
+                  'updated_at': data['updated_at'],
+                  'count': data['count'],
+                  'source': source,
+                  'addresses': data['addresses'],
+              }
+              (ADDR / addr_name).write_text(json.dumps(out, indent=2))
+          checksums = {f.name: hashlib.sha256(f.read_bytes()).hexdigest()[:16]
+                       for f in ADDR.glob('*.json') if f.name != 'MANIFEST.json'}
+          manifest = {
+              'version': '0.2.0',
+              'last_updated': time.time(),
+              'last_updated_iso': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+              'source': 'hash02/aml-detection-engine',
+              'schema': {
+                  'ofac.json': 'OFAC SDN ethereum addresses',
+                  'phishing.json': 'MetaMask eth-phishing-detect aggregate',
+                  'exploits.json': 'Analyst-curated exploit wallet list',
+                  'mixers.json': 'Tornado Cash pools + routers',
+                  'bridges.json': 'Cross-chain bridge routers',
+                  'offramps.json': 'No-KYC offramps + drainer infrastructure',
+              },
+              'checksums': checksums,
+              'consumers': ['hash02/aml-roaster'],
+          }
+          (ADDR / 'MANIFEST.json').write_text(json.dumps(manifest, indent=2))
+          PY
+
+      - name: Open PR if changed
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: auto/refresh-feeds
+          title: 'chore: refresh threat feeds from upstream'
+          commit-message: 'chore: refresh threat feeds from upstream'
+          body: |
+            Automated daily refresh of OFAC SDN and MetaMask eth-phishing-detect
+            feeds. Updated `addresses/*.json` + regenerated `addresses/MANIFEST.json`
+            with new SHA256 checksums.
+
+            Downstream consumers (aml-roaster) pull on their own cadence.
+          labels: |
+            automated
+            feeds-refresh
