@@ -226,6 +226,24 @@ def run_engine(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     df = score_transactions(df, cfg)
     df["risk_level"] = df["risk_score"].apply(risk_level)
     df["risk_emoji"] = df["risk_score"].apply(risk_emoji)
+
+    # Layer 2 — unsupervised anomaly score (Isolation Forest).
+    try:
+        from engine.ml_anomaly import fit_predict as ml_fit
+        df = ml_fit(df)
+    except Exception:  # noqa: BLE001 — ML layer is best-effort
+        df["ml_anomaly_score"] = 0.0
+        df["ml_anomaly_flag"]  = False
+
+    # Alert suppression — dedupe same-sender/same-rule bursts into one
+    # representative alert per time bucket. Pass-through if disabled.
+    try:
+        from engine.suppression import apply_suppression
+        df = apply_suppression(df, cfg)
+    except Exception:  # noqa: BLE001
+        df["suppressed"]   = False
+        df["supp_repr_id"] = ""
+
     return df
 
 
@@ -493,8 +511,28 @@ if raw_df is None or raw_df.empty:
     st.warning("No transactions to analyse. Upload a CSV or pick a different data source.")
     st.stop()
 
+# Schema validation — fast-fail with human-readable messages before we
+# commit the cost of running the full pipeline.
+try:
+    from engine.schema import normalise, validate_dataframe
+    issues = validate_dataframe(raw_df)
+    errors   = [i for i in issues if i.severity == "error"]
+    warnings = [i for i in issues if i.severity == "warning"]
+    if errors:
+        st.error("Input CSV failed schema validation:")
+        for i in errors:
+            st.code(str(i))
+        st.stop()
+    if warnings:
+        with st.expander("⚠️ Schema validation — warnings", expanded=False):
+            for i in warnings:
+                st.caption(str(i))
+    raw_df = normalise(raw_df)
+except ImportError:
+    pass
+
 _pipeline_start = time.perf_counter()
-with st.spinner("Running 26-rule detection pipeline..."):
+with st.spinner("Running 28-rule detection pipeline..."):
     try:
         # Ensure timestamp is parsed
         raw_df["timestamp"] = pd.to_datetime(raw_df["timestamp"])
@@ -707,6 +745,33 @@ if n_flagged > 0:
                     )
                 except Exception:  # noqa: BLE001
                     pass
+
+            # Reviewer disposition — gated on can("file_disposition").
+            # Analysts see a read-only note; reviewers + admins see the buttons.
+            if AUTH_AVAILABLE and USER is not None and AUDIT is not None:
+                if USER.can("file_disposition"):
+                    st.markdown("**Disposition**")
+                    d1, d2, d3, d4 = st.columns([1, 1, 1, 2])
+                    alert_id_hint = int(idx)  # local dataframe index as a proxy
+                    notes = d4.text_input("Notes", key=f"notes_{idx}",
+                                          label_visibility="collapsed",
+                                          placeholder="Optional reviewer notes")
+                    def _dispo(action: str):
+                        AUDIT.record_review(
+                            alert_id=alert_id_hint,
+                            reviewer=USER.username,
+                            disposition=action,
+                            notes=notes or "",
+                        )
+                        st.toast(f"Recorded: {action} by {USER.username}")
+                    if d1.button("Escalate", key=f"esc_{idx}"):
+                        _dispo("escalate")
+                    if d2.button("Dismiss",  key=f"dis_{idx}"):
+                        _dispo("dismiss")
+                    if d3.button("SAR filed", key=f"sar_{idx}"):
+                        _dispo("sar_filed")
+                else:
+                    st.caption("🔒 Disposition actions require reviewer role.")
 
         if i >= 19:  # Cap at 20 expanded rows for performance
             st.caption(f"... and {len(sorted_flagged) - 20} more flagged transactions.")

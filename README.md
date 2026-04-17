@@ -207,6 +207,22 @@ Phase 3 shipped:
 - [x] **Cross-chain adapters** — base class + ETH adapter + Tron / Solana stubs
 - [x] **RBAC** — 3-tier hierarchy (admin > reviewer > analyst) + per-action permission map
 
+Phase 4 shipped:
+
+- [x] **FastAPI sidecar** — `/score`, `/healthz`, `/feeds`, `/audit`, bearer-token auth
+- [x] **Unified notifier** — Telegram + Slack + generic webhook, env-gated, fails soft
+- [x] **Per-rule score breakdown** — analyst sees which rule contributed how many points
+- [x] **Live-ops dashboard** — feed freshness + audit-log tail in Streamlit
+- [x] **Makefile** — `make install | test | lint | backtest | feeds | run | api | docker | clean`
+
+Phase 5 shipped:
+
+- [x] **ML anomaly layer** — Isolation Forest (deterministic, versioned) appended as Layer 2
+- [x] **Alert suppression** — dedup by (sender, top rule, time bucket) + per-rule cooldown
+- [x] **Analyst disposition workflow** — reviewer role files escalate/dismiss/sar_filed via UI
+- [x] **Schema validator** — fast-fail on bad CSVs with human-readable error codes
+- [x] **Benchmark harness** — `scripts/benchmark.py` measures latency + throughput per-size
+
 Still aspirational:
 
 - [ ] **Tron / Solana full adapters** — currently stubs; SPL / TRC20 decoding TODO
