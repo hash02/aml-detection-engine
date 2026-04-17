@@ -107,6 +107,12 @@ else:
     USER = None
     AUDIT = None
 
+try:
+    from engine.cases import CaseManager
+    CASES = CaseManager(os.environ.get("AML_CASES_DB", "data/cases.db"))
+except Exception:  # noqa: BLE001
+    CASES = None
+
 # ── Page config ─────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="NEXUS-RISK · AML Engine Demo",
@@ -583,6 +589,17 @@ if AUDIT is not None:
         AUDIT.record_batch(result_df)
     except Exception:  # noqa: BLE001
         pass
+if CASES is not None:
+    try:
+        CASES.ingest_batch(result_df)
+    except Exception:  # noqa: BLE001
+        pass
+# Daily rule-fire record (drift tracking) — best-effort.
+try:
+    from engine.drift import DriftMonitor
+    DriftMonitor(os.environ.get("AML_AUDIT_DB", "data/audit.db")).record_daily(result_df)
+except Exception:  # noqa: BLE001
+    pass
 detect_rate = f"{(n_flagged / total * 100):.1f}%" if total > 0 else "—"
 
 st.markdown(f"<p style='color: #505068; font-size: 0.82rem; margin-bottom: 1rem;'>Engine run complete · {data_label}</p>", unsafe_allow_html=True)
@@ -779,6 +796,28 @@ if n_flagged > 0:
 
 else:
     st.success(f"✅ No transactions met the alert threshold (score ≥ {alert_threshold}). Try lowering the threshold in the sidebar.")
+
+# ── Triage queue: priority-sorted open cases ─────────────────────────────────
+if CASES is not None:
+    with st.expander("📋 Triage Queue — Open Cases (priority-sorted)"):
+        queue = CASES.triage_queue(limit=25)
+        stats = CASES.stats()
+        st.caption(
+            f"Open: {stats.get('open', 0)} · In review: {stats.get('in_review', 0)} · "
+            f"Escalated: {stats.get('escalated', 0)} · SAR filed: {stats.get('sar_filed', 0)} · "
+            f"Dismissed: {stats.get('dismissed', 0)}"
+        )
+        if not queue:
+            st.caption("Queue is empty — run the engine to populate cases.")
+        else:
+            q_df = pd.DataFrame(queue)
+            q_df["opened_at"]  = pd.to_datetime(q_df["opened_at"],  unit="s")
+            q_df["updated_at"] = pd.to_datetime(q_df["updated_at"], unit="s")
+            st.dataframe(
+                q_df[["id", "subject_id", "status", "priority",
+                      "alert_count", "opened_at", "updated_at", "assignee"]],
+                use_container_width=True, hide_index=True,
+            )
 
 # ── Live-ops panel: feed freshness + audit tail ──────────────────────────────
 with st.expander("🛰️ Live-Ops — Feed Status + Audit Tail"):

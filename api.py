@@ -68,8 +68,30 @@ def _require_token(authorization: str | None = Header(None)) -> None:
 
 
 init_observability()
-app = FastAPI(title="AML Detection Engine API", version="1.0.0")
+app = FastAPI(title="AML Detection Engine API", version="1.1.0")
 _AUDIT = AuditLog(os.environ.get("AML_AUDIT_DB", "data/audit.db"))
+
+# Case manager — lazy-imported to keep minimal deployments light.
+try:
+    from engine.cases import CaseManager
+    _CASES = CaseManager(os.environ.get("AML_CASES_DB", "data/cases.db"))
+except Exception:  # noqa: BLE001
+    _CASES = None
+
+
+# ── Rate limiting (env-gated) ─────────────────────────────────────────
+# Set AML_API_RATE_LIMIT="100/minute" to enable. Requires `slowapi`.
+_RATE_LIMIT = os.environ.get("AML_API_RATE_LIMIT", "")
+if _RATE_LIMIT:
+    try:
+        from slowapi import Limiter, _rate_limit_exceeded_handler  # type: ignore[import-not-found]
+        from slowapi.errors import RateLimitExceeded  # type: ignore[import-not-found]
+        from slowapi.util import get_remote_address  # type: ignore[import-not-found]
+        _limiter = Limiter(key_func=get_remote_address, default_limits=[_RATE_LIMIT])
+        app.state.limiter = _limiter
+        app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    except ImportError:  # pragma: no cover — only if slowapi missing
+        pass
 
 
 # ── Models ──────────────────────────────────────────────────────────
@@ -93,6 +115,14 @@ class ScoreRequest(BaseModel):
     transactions: list[Tx]
     alert_threshold: int | None = None
     write_audit: bool = False
+    # Phase 6: when true, include per-rule breakdown in each ScoredTx
+    explain: bool = False
+
+
+class RuleContribution(BaseModel):
+    rule: str
+    points: float
+    detail: str = ""
 
 
 class ScoredTx(BaseModel):
@@ -101,6 +131,8 @@ class ScoredTx(BaseModel):
     risk_level: str
     alert: bool
     reasons: str
+    # Phase 6: optional per-rule breakdown (populated when explain=true)
+    breakdown: list[RuleContribution] | None = None
 
 
 class ScoreResponse(BaseModel):
@@ -155,16 +187,24 @@ def score(req: ScoreRequest) -> ScoreResponse:
     cfg = _engine_config(req.alert_threshold)
     scored = run_full_pipeline(df, cfg)
 
-    results = [
-        ScoredTx(
+    if req.explain:
+        from engine.explain import score_breakdown
+    results: list[ScoredTx] = []
+    for _, r in scored.iterrows():
+        bd = None
+        if req.explain:
+            bd = [
+                RuleContribution(**part)  # type: ignore[arg-type]
+                for part in score_breakdown(r.to_dict(), cfg)
+            ]
+        results.append(ScoredTx(
             id=str(r["id"]),
             risk_score=int(r["risk_score"]),
             risk_level=str(r["risk_level"]),
             alert=bool(r["alert"]),
             reasons=str(r["reasons"]),
-        )
-        for _, r in scored.iterrows()
-    ]
+            breakdown=bd,
+        ))
 
     if req.write_audit:
         try:
@@ -186,6 +226,49 @@ def score(req: ScoreRequest) -> ScoreResponse:
 def audit(limit: int = 50) -> dict[str, Any]:
     limit = max(1, min(int(limit), 1000))
     return {"events": _AUDIT.fetch(limit=limit)}
+
+
+@app.get("/cases", dependencies=[Depends(_require_token)])
+def cases_triage(limit: int = 25) -> dict[str, Any]:
+    """Priority-sorted triage queue (open + in-review cases)."""
+    if _CASES is None:
+        raise HTTPException(status_code=503, detail="cases module unavailable")
+    limit = max(1, min(int(limit), 200))
+    return {"queue": _CASES.triage_queue(limit=limit), "stats": _CASES.stats()}
+
+
+@app.get("/cases/{case_id}", dependencies=[Depends(_require_token)])
+def cases_get(case_id: int) -> dict[str, Any]:
+    if _CASES is None:
+        raise HTTPException(status_code=503, detail="cases module unavailable")
+    case = _CASES.case(case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="case not found")
+    return case
+
+
+@app.get("/drift", dependencies=[Depends(_require_token)])
+def drift_status(window_days: int = 30, sigma: float = 3.0) -> dict[str, Any]:
+    """Rule fire-rate drift alerts over the rolling window."""
+    try:
+        from engine.drift import DriftMonitor
+    except ImportError:
+        raise HTTPException(status_code=503, detail="drift module unavailable") from None
+    mon = DriftMonitor(os.environ.get("AML_AUDIT_DB", "data/audit.db"))
+    alerts = mon.detect_drift(window_days=window_days, sigma=sigma)
+    return {
+        "window_days": window_days, "sigma": sigma,
+        "alert_count": len(alerts),
+        "alerts": [
+            {
+                "rule": a.rule, "today_fires": a.today_fires,
+                "baseline_mean": a.baseline_mean,
+                "baseline_std": a.baseline_std,
+                "z_score": a.z_score, "baseline_days": a.baseline_days,
+            }
+            for a in alerts
+        ],
+    }
 
 
 def _engine_config(alert_threshold: int | None) -> dict[str, Any]:

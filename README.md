@@ -223,6 +223,14 @@ Phase 5 shipped:
 - [x] **Schema validator** — fast-fail on bad CSVs with human-readable error codes
 - [x] **Benchmark harness** — `scripts/benchmark.py` measures latency + throughput per-size
 
+Phase 6 shipped:
+
+- [x] **Case management** — alerts grouped by subject into cases with a strict FSM lifecycle
+- [x] **Triage queue** — priority-sorted Streamlit expander + `/cases` API
+- [x] **Rule drift monitor** — daily fire-rate tracking with z-score deviation alerts
+- [x] **API explainability** — `/score?explain=true` returns per-rule contribution breakdown
+- [x] **Rate limiting** — `AML_API_RATE_LIMIT` env var wires slowapi middleware when set
+
 Still aspirational:
 
 - [ ] **Tron / Solana full adapters** — currently stubs; SPL / TRC20 decoding TODO
