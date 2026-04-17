@@ -44,6 +44,12 @@ rules-check:  ## Fail if docs/RULES.md is stale vs. the engine
 tune:  ## Print threshold-tuning suggestions from disposition history
 	$(PY) -c "from engine.tuning import suggest; [print(s) for s in suggest()]"
 
+whatif:  ## Counterfactual replay — e.g. make whatif SET="alert_threshold=60"
+	FEEDS_OFFLINE=1 $(PY) scripts/whatif.py --input data/sample_transactions.csv --set $(SET) --out whatif_report.json
+
+purge:  ## Apply retention policy to the audit log (default 2 years)
+	$(PY) scripts/purge.py --db data/audit.db
+
 compose-up:  ## Bring up the production compose stack
 	docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d
 

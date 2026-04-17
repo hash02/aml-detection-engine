@@ -1,0 +1,42 @@
+{
+  "0x28c6c06298d514db089934071355e5743bf21d60": {
+    "label": "Binance hot wallet 14",
+    "category": "exchange",
+    "confidence": 0.95
+  },
+  "0x3f5ce5fbfe3e9af3971dd833d26ba9b5c936f0be": {
+    "label": "Binance 7",
+    "category": "exchange",
+    "confidence": 0.95
+  },
+  "0xd551234ae421e3bcba99a0da6d736074f22192ff": {
+    "label": "Binance 8",
+    "category": "exchange",
+    "confidence": 0.95
+  },
+  "0x71660c4005ba85c37ccec55d0c4493e66fe775d3": {
+    "label": "Coinbase 1",
+    "category": "exchange",
+    "confidence": 0.95
+  },
+  "0xa9d1e08c7793af67e9d92fe308d5697fb81d3e43": {
+    "label": "Coinbase 2",
+    "category": "exchange",
+    "confidence": 0.95
+  },
+  "0x2910543af39aba0cd09dbb2d50200b3e800a63d2": {
+    "label": "Kraken",
+    "category": "exchange",
+    "confidence": 0.95
+  },
+  "0xd8da6bf26964af9d7eed9e03e53415d37aa96045": {
+    "label": "vitalik.eth",
+    "category": "notable",
+    "confidence": 1.0
+  },
+  "0xfa09c3a328792253f8dee7116848723b72a6d2ea": {
+    "label": "Ethereum Foundation",
+    "category": "notable",
+    "confidence": 1.0
+  }
+}

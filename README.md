@@ -231,6 +231,27 @@ Phase 6 shipped:
 - [x] **API explainability** — `/score?explain=true` returns per-rule contribution breakdown
 - [x] **Rate limiting** — `AML_API_RATE_LIMIT` env var wires slowapi middleware when set
 
+Phase 7 shipped:
+
+- [x] **Rule catalogue generator** — `docs/RULES.md` auto-built from docstrings, CI-gated for staleness
+- [x] **Threshold tuning** — `engine/tuning.py` advisory suggestions from disposition history
+- [x] **Operator docs** — `docs/DEPLOYMENT.md`, `OPERATIONS.md`, `MODEL_CARD.md`
+- [x] **Production compose** — `deploy/docker-compose.prod.yml` bundling streamlit + FastAPI + hourly feed refresher
+
+Phase 8 shipped:
+
+- [x] **Graph topology features** — out_degree, in_degree, passthrough, unique_ratio, betweenness → ML layer
+- [x] **What-if threshold replay** — `scripts/whatif.py` with CONFIG overrides, added/removed/stable alert diff
+- [x] **Data retention + PII redaction** — `engine/retention.py` + `scripts/purge.py`
+- [x] **GDPR subject forget** — `forget_subject()` wipes every reference across audit + cases stores
+
+Phase 9 shipped:
+
+- [x] **Subject enrichment** — `engine/enrichment.py` local label DB + feed-backed categories + pluggable provider, TTL-cached
+- [x] **Severity-routed notifications** — `AML_NOTIFY_ROUTING` JSON maps level → channel list (CRITICAL → PagerDuty-via-webhook, WARN → Slack, …)
+- [x] **Weekly backtest automation** — GitHub Action runs Monday 06:00 UTC; opens a regression issue if detection rate drops below 60%
+- [x] **Enrichment badges in UI** — each alert shows the sender/receiver category chip at a glance
+
 Still aspirational:
 
 - [ ] **Tron / Solana full adapters** — currently stubs; SPL / TRC20 decoding TODO

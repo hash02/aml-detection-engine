@@ -18,6 +18,8 @@ output_v*/
 output_ai/
 *.json
 !package.json
+!data/labels.json
+!config/watchlist.json
 
 # Runtime artefacts — local SQLite audit log, feed caches, backtest reports
 data/audit.db
