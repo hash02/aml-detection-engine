@@ -3,9 +3,9 @@ NEXUS-RISK — Live AML Detection Demo
 =====================================
 Bionic Banker · bionicbanker.tech
 
-A live, browser-based interface to the NEXUS-RISK AML engine v11.
+A live, browser-based interface to the NEXUS-RISK AML engine v13.
 Upload a transaction CSV or run on the built-in sample data to see
-22 blockchain AML detection rules fire in real time.
+28 blockchain AML detection rules fire in real time.
 
 Run locally:
     pip install streamlit pandas
@@ -110,93 +110,181 @@ else:
 # ── Page config ─────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="NEXUS-RISK · AML Engine Demo",
-    page_icon="🔍",
+    page_icon="🟢",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ── Custom CSS — dark theme matching bionicbanker.tech ───────────────────────
+# ── Custom CSS — Bionic Banker terminal theme (green-on-black) ──────────────
+# Mirrors bionicbanker.tech/ai-intelligence: pure black background, JetBrains
+# Mono everywhere, a single terminal-green accent (#4ade80) with muted grays
+# for body copy. No gradients, no rounded-purple buttons.
 st.markdown("""
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
 <style>
-  /* Background */
-  .stApp { background-color: #08080e; }
+  :root {
+    --bb-bg:          #000000;
+    --bb-surface:     #0a0a0a;
+    --bb-border:      #1a1a1a;
+    --bb-accent:      #4ade80;    /* terminal green */
+    --bb-accent-dim:  rgba(74, 222, 128, 0.12);
+    --bb-accent-mid:  rgba(74, 222, 128, 0.35);
+    --bb-text:        #ededf5;
+    --bb-muted:       #8a8aa0;
+    --bb-faint:       #505068;
+    --bb-danger:      #ef4444;
+    --bb-warn:        #eab308;
+    --bb-ok:          #4ade80;
+  }
+
+  /* Root + font */
+  html, body, .stApp, [class*="css"] {
+    font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, Menlo, monospace !important;
+  }
+  .stApp { background-color: var(--bb-bg); color: var(--bb-text); }
   .stApp > header { background-color: transparent !important; }
 
   /* Sidebar */
   section[data-testid="stSidebar"] {
-    background-color: #0e0e1c;
-    border-right: 1px solid rgba(91,115,248,0.14);
+    background-color: var(--bb-bg);
+    border-right: 1px solid var(--bb-border);
   }
+  section[data-testid="stSidebar"] * { color: var(--bb-text) !important; }
 
-  /* Metric cards */
+  /* Headings — tight, uppercase accent for section labels */
+  h1, h2, h3, h4 { color: var(--bb-text) !important; letter-spacing: -0.01em; }
+  h1 { font-weight: 800; }
+
+  /* Metric cards — thin green border, green number, muted uppercase label */
   div[data-testid="metric-container"] {
-    background-color: #0e0e1c;
-    border: 1px solid rgba(91,115,248,0.14);
-    border-radius: 12px;
+    background-color: var(--bb-surface);
+    border: 1px solid var(--bb-border);
+    border-radius: 8px;
     padding: 1rem 1.25rem;
   }
-
-  /* Metric label */
   div[data-testid="metric-container"] label {
-    color: #8a8aa0 !important;
-    font-size: 0.78rem !important;
+    color: var(--bb-muted) !important;
+    font-size: 0.72rem !important;
     font-weight: 600 !important;
-    letter-spacing: 0.08em !important;
+    letter-spacing: 0.12em !important;
     text-transform: uppercase !important;
   }
-
-  /* Metric value */
   div[data-testid="metric-container"] [data-testid="stMetricValue"] {
-    color: #ededf5 !important;
-    font-size: 1.9rem !important;
-    font-weight: 700 !important;
+    color: var(--bb-accent) !important;
+    font-size: 2rem !important;
+    font-weight: 800 !important;
+    font-family: 'JetBrains Mono', monospace !important;
+  }
+  div[data-testid="metric-container"] [data-testid="stMetricDelta"] {
+    color: var(--bb-muted) !important;
+    font-size: 0.72rem !important;
   }
 
-  /* Expander */
+  /* Expanders — flat black cards with thin border */
   div[data-testid="stExpander"] {
-    background-color: #0e0e1c;
-    border: 1px solid rgba(91,115,248,0.14);
-    border-radius: 12px;
+    background-color: var(--bb-surface);
+    border: 1px solid var(--bb-border);
+    border-radius: 8px;
+  }
+  div[data-testid="stExpander"] summary { color: var(--bb-text) !important; }
+  div[data-testid="stExpander"] summary:hover { color: var(--bb-accent) !important; }
+
+  /* Dataframes */
+  .stDataFrame { border-radius: 8px; border: 1px solid var(--bb-border); }
+
+  /* Alert boxes — keep their colour cue but tone down the background */
+  div[data-testid="stAlert"] {
+    border-radius: 8px;
+    background-color: var(--bb-surface) !important;
+    border: 1px solid var(--bb-border) !important;
   }
 
-  /* Dataframe */
-  .stDataFrame { border-radius: 10px; }
+  /* Caption / helper text */
+  .stCaption, [data-testid="stCaptionContainer"] { color: var(--bb-faint) !important; }
 
-  /* Headings */
-  h1, h2, h3 { color: #ededf5 !important; }
-
-  /* Info/warning/success boxes */
-  div[data-testid="stAlert"] { border-radius: 10px; }
-
-  /* Caption text */
-  .stCaption { color: #505068 !important; }
-
-  /* Buttons */
+  /* Buttons — terminal-style green filled, black text */
   .stButton > button {
-    background: linear-gradient(135deg, #5b73f8, #8b6cf7);
-    color: white;
-    border: none;
-    border-radius: 10px;
-    font-weight: 600;
-    padding: 0.5rem 1.5rem;
-    transition: opacity 0.2s;
+    background: var(--bb-accent);
+    color: #000000 !important;
+    border: 1px solid var(--bb-accent);
+    border-radius: 6px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 0.4rem 1.2rem;
+    transition: all 0.15s;
   }
-  .stButton > button:hover { opacity: 0.88; }
+  .stButton > button:hover {
+    background: transparent;
+    color: var(--bb-accent) !important;
+    border-color: var(--bb-accent);
+  }
+  .stButton > button:focus:not(:active) {
+    background: var(--bb-accent);
+    color: #000000 !important;
+  }
 
-  /* File uploader */
+  /* Download button — same treatment */
+  .stDownloadButton > button {
+    background: transparent;
+    color: var(--bb-accent) !important;
+    border: 1px solid var(--bb-accent);
+    border-radius: 6px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .stDownloadButton > button:hover {
+    background: var(--bb-accent);
+    color: #000000 !important;
+  }
+
+  /* File uploader — dashed green outline on hover */
   div[data-testid="stFileUploader"] {
-    background: #0e0e1c;
-    border: 1px dashed rgba(91,115,248,0.3);
-    border-radius: 10px;
+    background: var(--bb-surface);
+    border: 1px dashed var(--bb-border);
+    border-radius: 8px;
     padding: 0.5rem;
   }
+  div[data-testid="stFileUploader"]:hover { border-color: var(--bb-accent-mid); }
+
+  /* Text inputs + select */
+  input, textarea, select,
+  div[data-baseweb="input"] input,
+  div[data-baseweb="select"] div {
+    background-color: var(--bb-surface) !important;
+    color: var(--bb-text) !important;
+    border-color: var(--bb-border) !important;
+    font-family: 'JetBrains Mono', monospace !important;
+  }
+  input:focus, textarea:focus { border-color: var(--bb-accent) !important; }
+
+  /* Slider track */
+  div[data-baseweb="slider"] div[role="slider"] { background: var(--bb-accent) !important; }
+
+  /* Tabs */
+  div[data-baseweb="tab-list"] { border-bottom: 1px solid var(--bb-border); }
+  div[data-baseweb="tab"] { color: var(--bb-muted) !important; }
+  div[data-baseweb="tab"][aria-selected="true"] {
+    color: var(--bb-accent) !important;
+    border-bottom: 2px solid var(--bb-accent) !important;
+  }
+
+  /* Code blocks */
+  pre, code { font-family: 'JetBrains Mono', monospace !important; }
+  pre { background-color: var(--bb-surface) !important; border: 1px solid var(--bb-border); }
+
+  /* Hide default Streamlit chrome */
+  #MainMenu { visibility: hidden; }
+  footer { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
 
 # ── Helper: run the full detection pipeline ──────────────────────────────────
 def run_engine(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
-    """Run the complete 26-rule AML detection pipeline on a DataFrame."""
+    """Run the complete 28-rule AML detection pipeline on a DataFrame."""
     df = compute_features(df, cfg)
     df, _ = detect_layering(df, cfg)
     df = detect_mixer_touch(df, cfg)
@@ -494,7 +582,7 @@ if raw_df is None or raw_df.empty:
     st.stop()
 
 _pipeline_start = time.perf_counter()
-with st.spinner("Running 26-rule detection pipeline..."):
+with st.spinner("Running 28-rule detection pipeline..."):
     try:
         # Ensure timestamp is parsed
         raw_df["timestamp"] = pd.to_datetime(raw_df["timestamp"])
