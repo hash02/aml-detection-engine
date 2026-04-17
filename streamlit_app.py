@@ -676,6 +676,19 @@ if n_flagged > 0:
                 else:
                     st.caption("No specific signals decoded.")
 
+            # Per-rule contribution breakdown — shows how each rule
+            # contributed to the final risk score. Purely additive;
+            # identical numbers to score_row(), just disaggregated.
+            try:
+                from engine.explain import score_breakdown
+                breakdown = score_breakdown(row.to_dict(), cfg)
+                if breakdown:
+                    st.markdown("**Score breakdown:**")
+                    bd_df = pd.DataFrame(breakdown)
+                    st.dataframe(bd_df, use_container_width=True, hide_index=True)
+            except Exception:  # noqa: BLE001
+                pass
+
             # SAR-SF export button — gated by RBAC.can("download_sar").
             # Any authenticated analyst qualifies; anonymous users see a
             # disabled placeholder so the capability is still discoverable.
@@ -701,6 +714,33 @@ if n_flagged > 0:
 
 else:
     st.success(f"✅ No transactions met the alert threshold (score ≥ {alert_threshold}). Try lowering the threshold in the sidebar.")
+
+# ── Live-ops panel: feed freshness + audit tail ──────────────────────────────
+with st.expander("🛰️ Live-Ops — Feed Status + Audit Tail"):
+    lop_a, lop_b = st.columns(2)
+    with lop_a:
+        st.markdown("**Threat-intel feeds**")
+        if FEED_STATUS_AVAILABLE:
+            rows = []
+            for name in FEEDS:
+                age = feed_age_hours(name)
+                status = "baseline only" if age is None else f"{age:.1f}h ago"
+                rows.append({"feed": name, "last refresh": status})
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        else:
+            st.caption("Feeds module unavailable in this build.")
+    with lop_b:
+        st.markdown("**Recent audit events**")
+        if AUDIT is not None:
+            events = AUDIT.fetch(limit=10)
+            if events:
+                audit_df = pd.DataFrame(events)[["created_at", "risk_level", "tx_id", "amount"]]
+                audit_df["created_at"] = pd.to_datetime(audit_df["created_at"], unit="s")
+                st.dataframe(audit_df, use_container_width=True, hide_index=True)
+            else:
+                st.caption("No audit events yet — run the engine to populate.")
+        else:
+            st.caption("Audit log disabled (auth module unavailable).")
 
 # ── Raw data toggle ────────────────────────────────────────────────────────────
 with st.expander("🔬 View Raw Scored Data (all transactions)"):

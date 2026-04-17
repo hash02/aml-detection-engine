@@ -19,6 +19,16 @@ output_ai/
 *.json
 !package.json
 
+# Runtime artefacts — local SQLite audit log, feed caches, backtest reports
+data/audit.db
+data/feeds/
+data/monitoring/
+backtest_report.json
+pipeline_runs/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
 # OS
 .DS_Store
 Thumbs.db
