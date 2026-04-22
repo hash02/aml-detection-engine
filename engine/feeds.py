@@ -216,6 +216,10 @@ def refresh(name: str | None = None) -> dict[str, int]:
     results: dict[str, int] = {}
     for feed in targets:
         if feed.fetch is None:
+            # Baseline-only feeds still need a cache file so workflow step 5 / MANIFEST
+            # picks them up. Write the baseline if no cache exists OR the cache is stale.
+            if not feed.cache_path.exists():
+                _save_cache(feed, feed.baseline)
             results[feed.name] = len(feed.baseline)
             continue
         if OFFLINE:

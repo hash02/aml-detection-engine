@@ -1,7 +1,7 @@
 {
   "feed": "metamask_phish",
-  "updated_at": 1776416986.9241762,
-  "count": 191,
+  "updated_at": 1776874000.347288,
+  "count": 189,
   "source": "https://github.com/MetaMask/eth-phishing-detect",
   "addresses": [
     "0x-alphafi.pages.dev",
@@ -38,7 +38,6 @@
     "0x0-eligibility.co",
     "0x0-mainnet.com",
     "0x0-mainnet.org",
-    "0x0-rewards.xyz",
     "0x0-sushi.cfd",
     "0x0-sushi.com",
     "0x0-sushi.lat",
@@ -72,8 +71,6 @@
     "0x2201.top",
     "0x2529-f0dc5-swaplolcatclub.pages.dev",
     "0x26.top",
-    "0x3b-auth.app",
-    "0x3b-auth.zip",
     "0x64711-initia.xyz",
     "0x67.top",
     "0xaaee65df7aefbad2bd75bb790ef0ff3fcdf52c68-defi.pages.dev",
@@ -104,7 +101,6 @@
     "0xdapp.web.app",
     "0xday.tech",
     "0xdegen.xyz",
-    "0xdeployer.xyz",
     "0xdex.top",
     "0xdrop.icu",
     "0xdrop.in",
@@ -156,6 +152,7 @@
     "0xpromo.top",
     "0xprs.top",
     "0xpump.xyz",
+    "0xqr.top",
     "0xramonos-solana.com",
     "0xrew.xyz",
     "0xreward.xyz",
@@ -193,6 +190,7 @@
     "0xwizard.com",
     "0xwolf.world",
     "0xwrap-3774039237344-f0.pages.dev",
+    "0xwt.top",
     "0xxvm.xyz",
     "0xzerebro.xyz"
   ]
