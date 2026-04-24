@@ -107,6 +107,12 @@ else:
     USER = None
     AUDIT = None
 
+try:
+    from engine.cases import CaseManager
+    CASES = CaseManager(os.environ.get("AML_CASES_DB", "data/cases.db"))
+except Exception:  # noqa: BLE001
+    CASES = None
+
 # ── Page config ─────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="NEXUS-RISK · AML Engine Demo",
@@ -314,6 +320,32 @@ def run_engine(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     df = score_transactions(df, cfg)
     df["risk_level"] = df["risk_score"].apply(risk_level)
     df["risk_emoji"] = df["risk_score"].apply(risk_emoji)
+
+    # Graph topology features — feeds the ML layer. Best-effort; if
+    # networkx isn't installed, columns are zero-filled.
+    try:
+        from engine.graph_features import enrich as graph_enrich
+        df = graph_enrich(df)
+    except Exception:  # noqa: BLE001
+        pass
+
+    # Layer 2 — unsupervised anomaly score (Isolation Forest).
+    try:
+        from engine.ml_anomaly import fit_predict as ml_fit
+        df = ml_fit(df)
+    except Exception:  # noqa: BLE001 — ML layer is best-effort
+        df["ml_anomaly_score"] = 0.0
+        df["ml_anomaly_flag"]  = False
+
+    # Alert suppression — dedupe same-sender/same-rule bursts into one
+    # representative alert per time bucket. Pass-through if disabled.
+    try:
+        from engine.suppression import apply_suppression
+        df = apply_suppression(df, cfg)
+    except Exception:  # noqa: BLE001
+        df["suppressed"]   = False
+        df["supp_repr_id"] = ""
+
     return df
 
 
@@ -581,6 +613,26 @@ if raw_df is None or raw_df.empty:
     st.warning("No transactions to analyse. Upload a CSV or pick a different data source.")
     st.stop()
 
+# Schema validation — fast-fail with human-readable messages before we
+# commit the cost of running the full pipeline.
+try:
+    from engine.schema import normalise, validate_dataframe
+    issues = validate_dataframe(raw_df)
+    errors   = [i for i in issues if i.severity == "error"]
+    warnings = [i for i in issues if i.severity == "warning"]
+    if errors:
+        st.error("Input CSV failed schema validation:")
+        for i in errors:
+            st.code(str(i))
+        st.stop()
+    if warnings:
+        with st.expander("⚠️ Schema validation — warnings", expanded=False):
+            for i in warnings:
+                st.caption(str(i))
+    raw_df = normalise(raw_df)
+except ImportError:
+    pass
+
 _pipeline_start = time.perf_counter()
 with st.spinner("Running 28-rule detection pipeline..."):
     try:
@@ -633,6 +685,17 @@ if AUDIT is not None:
         AUDIT.record_batch(result_df)
     except Exception:  # noqa: BLE001
         pass
+if CASES is not None:
+    try:
+        CASES.ingest_batch(result_df)
+    except Exception:  # noqa: BLE001
+        pass
+# Daily rule-fire record (drift tracking) — best-effort.
+try:
+    from engine.drift import DriftMonitor
+    DriftMonitor(os.environ.get("AML_AUDIT_DB", "data/audit.db")).record_daily(result_df)
+except Exception:  # noqa: BLE001
+    pass
 detect_rate = f"{(n_flagged / total * 100):.1f}%" if total > 0 else "—"
 
 st.markdown(f"<p style='color: #505068; font-size: 0.82rem; margin-bottom: 1rem;'>Engine run complete · {data_label}</p>", unsafe_allow_html=True)
@@ -733,6 +796,42 @@ if n_flagged > 0:
         label = f"{emoji} **{level}** · Score: {score} · ${amount:,.0f} · {sender[:20]}..."
 
         with st.expander(label):
+            # Subject enrichment — a one-line badge for each side of the
+            # transaction so analysts can tell an exchange from a mixer
+            # at a glance without leaving the UI.
+            try:
+                from engine.enrichment import default_resolver
+                resolver = default_resolver()
+                enr_sender   = resolver.lookup(str(row["sender_id"]))
+                enr_receiver = resolver.lookup(str(row["receiver_id"]))
+                _CAT_COLOUR = {
+                    "sanctioned":   "#ef4444",
+                    "phishing":     "#ef4444",
+                    "mixer":        "#f97316",
+                    "bridge":       "#eab308",
+                    "exchange":     "#22c55e",
+                    "lrt_offramp":  "#f97316",
+                    "notable":      "#3b82f6",
+                    "labeled":      "#8b6cf7",
+                    "unknown":      "#505068",
+                }
+                def _chip(e):
+                    col = _CAT_COLOUR.get(e.category, "#505068")
+                    return (f"<span style='background:{col}22; color:{col}; "
+                            f"border:1px solid {col}; padding:0.15rem 0.55rem; "
+                            f"border-radius:6px; font-size:0.72rem;'>"
+                            f"{e.category} · {e.label[:40]}</span>")
+                if enr_sender.category != "unknown" or enr_receiver.category != "unknown":
+                    st.markdown(
+                        f"<div style='margin-bottom:0.5rem; font-size:0.78rem;'>"
+                        f"<strong style='color:#8a8aa0;'>Sender:</strong> {_chip(enr_sender)}"
+                        f" &nbsp;&nbsp; "
+                        f"<strong style='color:#8a8aa0;'>Receiver:</strong> {_chip(enr_receiver)}"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+            except Exception:  # noqa: BLE001 — enrichment is best-effort
+                pass
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown(f"""
@@ -764,6 +863,19 @@ if n_flagged > 0:
                 else:
                     st.caption("No specific signals decoded.")
 
+            # Per-rule contribution breakdown — shows how each rule
+            # contributed to the final risk score. Purely additive;
+            # identical numbers to score_row(), just disaggregated.
+            try:
+                from engine.explain import score_breakdown
+                breakdown = score_breakdown(row.to_dict(), cfg)
+                if breakdown:
+                    st.markdown("**Score breakdown:**")
+                    bd_df = pd.DataFrame(breakdown)
+                    st.dataframe(bd_df, use_container_width=True, hide_index=True)
+            except Exception:  # noqa: BLE001
+                pass
+
             # SAR-SF export button — gated by RBAC.can("download_sar").
             # Any authenticated analyst qualifies; anonymous users see a
             # disabled placeholder so the capability is still discoverable.
@@ -783,12 +895,88 @@ if n_flagged > 0:
                 except Exception:  # noqa: BLE001
                     pass
 
+            # Reviewer disposition — gated on can("file_disposition").
+            # Analysts see a read-only note; reviewers + admins see the buttons.
+            if AUTH_AVAILABLE and USER is not None and AUDIT is not None:
+                if USER.can("file_disposition"):
+                    st.markdown("**Disposition**")
+                    d1, d2, d3, d4 = st.columns([1, 1, 1, 2])
+                    alert_id_hint = int(idx)  # local dataframe index as a proxy
+                    notes = d4.text_input("Notes", key=f"notes_{idx}",
+                                          label_visibility="collapsed",
+                                          placeholder="Optional reviewer notes")
+                    def _dispo(action: str):
+                        AUDIT.record_review(
+                            alert_id=alert_id_hint,
+                            reviewer=USER.username,
+                            disposition=action,
+                            notes=notes or "",
+                        )
+                        st.toast(f"Recorded: {action} by {USER.username}")
+                    if d1.button("Escalate", key=f"esc_{idx}"):
+                        _dispo("escalate")
+                    if d2.button("Dismiss",  key=f"dis_{idx}"):
+                        _dispo("dismiss")
+                    if d3.button("SAR filed", key=f"sar_{idx}"):
+                        _dispo("sar_filed")
+                else:
+                    st.caption("🔒 Disposition actions require reviewer role.")
+
         if i >= 19:  # Cap at 20 expanded rows for performance
             st.caption(f"... and {len(sorted_flagged) - 20} more flagged transactions.")
             break
 
 else:
     st.success(f"✅ No transactions met the alert threshold (score ≥ {alert_threshold}). Try lowering the threshold in the sidebar.")
+
+# ── Triage queue: priority-sorted open cases ─────────────────────────────────
+if CASES is not None:
+    with st.expander("📋 Triage Queue — Open Cases (priority-sorted)"):
+        queue = CASES.triage_queue(limit=25)
+        stats = CASES.stats()
+        st.caption(
+            f"Open: {stats.get('open', 0)} · In review: {stats.get('in_review', 0)} · "
+            f"Escalated: {stats.get('escalated', 0)} · SAR filed: {stats.get('sar_filed', 0)} · "
+            f"Dismissed: {stats.get('dismissed', 0)}"
+        )
+        if not queue:
+            st.caption("Queue is empty — run the engine to populate cases.")
+        else:
+            q_df = pd.DataFrame(queue)
+            q_df["opened_at"]  = pd.to_datetime(q_df["opened_at"],  unit="s")
+            q_df["updated_at"] = pd.to_datetime(q_df["updated_at"], unit="s")
+            st.dataframe(
+                q_df[["id", "subject_id", "status", "priority",
+                      "alert_count", "opened_at", "updated_at", "assignee"]],
+                use_container_width=True, hide_index=True,
+            )
+
+# ── Live-ops panel: feed freshness + audit tail ──────────────────────────────
+with st.expander("🛰️ Live-Ops — Feed Status + Audit Tail"):
+    lop_a, lop_b = st.columns(2)
+    with lop_a:
+        st.markdown("**Threat-intel feeds**")
+        if FEED_STATUS_AVAILABLE:
+            rows = []
+            for name in FEEDS:
+                age = feed_age_hours(name)
+                status = "baseline only" if age is None else f"{age:.1f}h ago"
+                rows.append({"feed": name, "last refresh": status})
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        else:
+            st.caption("Feeds module unavailable in this build.")
+    with lop_b:
+        st.markdown("**Recent audit events**")
+        if AUDIT is not None:
+            events = AUDIT.fetch(limit=10)
+            if events:
+                audit_df = pd.DataFrame(events)[["created_at", "risk_level", "tx_id", "amount"]]
+                audit_df["created_at"] = pd.to_datetime(audit_df["created_at"], unit="s")
+                st.dataframe(audit_df, use_container_width=True, hide_index=True)
+            else:
+                st.caption("No audit events yet — run the engine to populate.")
+        else:
+            st.caption("Audit log disabled (auth module unavailable).")
 
 # ── Raw data toggle ────────────────────────────────────────────────────────────
 with st.expander("🔬 View Raw Scored Data (all transactions)"):

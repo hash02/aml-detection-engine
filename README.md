@@ -227,6 +227,51 @@ Phase 3 shipped:
 - [x] **Cross-chain adapters** — base class + ETH adapter + Tron / Solana stubs
 - [x] **RBAC** — 3-tier hierarchy (admin > reviewer > analyst) + per-action permission map
 
+Phase 4 shipped:
+
+- [x] **FastAPI sidecar** — `/score`, `/healthz`, `/feeds`, `/audit`, bearer-token auth
+- [x] **Unified notifier** — Telegram + Slack + generic webhook, env-gated, fails soft
+- [x] **Per-rule score breakdown** — analyst sees which rule contributed how many points
+- [x] **Live-ops dashboard** — feed freshness + audit-log tail in Streamlit
+- [x] **Makefile** — `make install | test | lint | backtest | feeds | run | api | docker | clean`
+
+Phase 5 shipped:
+
+- [x] **ML anomaly layer** — Isolation Forest (deterministic, versioned) appended as Layer 2
+- [x] **Alert suppression** — dedup by (sender, top rule, time bucket) + per-rule cooldown
+- [x] **Analyst disposition workflow** — reviewer role files escalate/dismiss/sar_filed via UI
+- [x] **Schema validator** — fast-fail on bad CSVs with human-readable error codes
+- [x] **Benchmark harness** — `scripts/benchmark.py` measures latency + throughput per-size
+
+Phase 6 shipped:
+
+- [x] **Case management** — alerts grouped by subject into cases with a strict FSM lifecycle
+- [x] **Triage queue** — priority-sorted Streamlit expander + `/cases` API
+- [x] **Rule drift monitor** — daily fire-rate tracking with z-score deviation alerts
+- [x] **API explainability** — `/score?explain=true` returns per-rule contribution breakdown
+- [x] **Rate limiting** — `AML_API_RATE_LIMIT` env var wires slowapi middleware when set
+
+Phase 7 shipped:
+
+- [x] **Rule catalogue generator** — `docs/RULES.md` auto-built from docstrings, CI-gated for staleness
+- [x] **Threshold tuning** — `engine/tuning.py` advisory suggestions from disposition history
+- [x] **Operator docs** — `docs/DEPLOYMENT.md`, `OPERATIONS.md`, `MODEL_CARD.md`
+- [x] **Production compose** — `deploy/docker-compose.prod.yml` bundling streamlit + FastAPI + hourly feed refresher
+
+Phase 8 shipped:
+
+- [x] **Graph topology features** — out_degree, in_degree, passthrough, unique_ratio, betweenness → ML layer
+- [x] **What-if threshold replay** — `scripts/whatif.py` with CONFIG overrides, added/removed/stable alert diff
+- [x] **Data retention + PII redaction** — `engine/retention.py` + `scripts/purge.py`
+- [x] **GDPR subject forget** — `forget_subject()` wipes every reference across audit + cases stores
+
+Phase 9 shipped:
+
+- [x] **Subject enrichment** — `engine/enrichment.py` local label DB + feed-backed categories + pluggable provider, TTL-cached
+- [x] **Severity-routed notifications** — `AML_NOTIFY_ROUTING` JSON maps level → channel list (CRITICAL → PagerDuty-via-webhook, WARN → Slack, …)
+- [x] **Weekly backtest automation** — GitHub Action runs Monday 06:00 UTC; opens a regression issue if detection rate drops below 60%
+- [x] **Enrichment badges in UI** — each alert shows the sender/receiver category chip at a glance
+
 Still aspirational:
 
 - [ ] **Tron / Solana full adapters** — currently stubs; SPL / TRC20 decoding TODO

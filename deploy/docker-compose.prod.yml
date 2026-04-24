@@ -1,0 +1,53 @@
+# Production compose — streamlit UI + FastAPI sidecar + hourly feed refresher.
+# Start:   docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d
+# Stop:    docker compose -f deploy/docker-compose.prod.yml down
+# Upgrade: docker compose -f deploy/docker-compose.prod.yml pull && up -d
+
+services:
+  streamlit:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: aml-engine:prod
+    container_name: aml-streamlit
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    volumes:
+      - aml-data:/app/data
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  api:
+    image: aml-engine:prod
+    container_name: aml-api
+    restart: unless-stopped
+    depends_on:
+      - streamlit
+    command: uvicorn api:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - aml-data:/app/data   # shares the audit + cases DBs with streamlit
+    env_file:
+      - .env
+
+  feeds:
+    image: aml-engine:prod
+    container_name: aml-feeds
+    restart: unless-stopped
+    command: >
+      sh -c "while true; do
+        python scripts/refresh_feeds.py || true;
+        sleep 3600;
+      done"
+    volumes:
+      - aml-data:/app/data
+    env_file:
+      - .env
+
+volumes:
+  aml-data:
+    driver: local
