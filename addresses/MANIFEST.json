@@ -1,10 +1,10 @@
 {
   "version": "0.2.0",
-  "last_updated": 1776417022.761414,
-  "last_updated_iso": "2026-04-17T09:10:22Z",
+  "last_updated": 1776919550.3735235,
+  "last_updated_iso": "2026-04-23T04:45:50Z",
   "source": "hash02/aml-detection-engine",
   "schema": {
-    "ofac.json": "OFAC SDN ethereum addresses, per 0xB10C/ofac-sanctioned-digital-currency-addresses",
+    "ofac.json": "OFAC SDN ethereum addresses",
     "phishing.json": "MetaMask eth-phishing-detect aggregate",
     "exploits.json": "Analyst-curated exploit wallet list",
     "mixers.json": "Tornado Cash pools + routers",
@@ -12,14 +12,14 @@
     "offramps.json": "No-KYC offramps + drainer infrastructure"
   },
   "checksums": {
+    "mixers.json": "7b3bbd17b375c4b7",
+    "phishing.json": "2abd2528e57cd025",
+    "ofac.json": "6cb0abfe08655dd6",
+    "bridges.json": "ac8b87f38b22f2e6",
     "exploits.json": "57dee06dfb0f08f2",
-    "phishing.json": "fc9b9a8580168fba",
-    "ofac.json": "546388dfc1b19214",
-    "bridges.json": "739cc105a719a886",
-    "mixers.json": "74ccbfc68929051f",
-    "offramps.json": "24cc2ba3aa187552"
+    "offramps.json": "1a1876f795ec4887"
   },
   "consumers": [
-    "hash02/aml-roaster (via sync-from-engine.yml workflow)"
+    "hash02/aml-roaster"
   ]
 }
