@@ -1,7 +1,7 @@
 {
   "version": "0.2.0",
-  "last_updated": 1776919550.3735235,
-  "last_updated_iso": "2026-04-23T04:45:50Z",
+  "last_updated": 1777440059.6202137,
+  "last_updated_iso": "2026-04-29T05:20:59Z",
   "source": "hash02/aml-detection-engine",
   "schema": {
     "ofac.json": "OFAC SDN ethereum addresses",
@@ -12,12 +12,12 @@
     "offramps.json": "No-KYC offramps + drainer infrastructure"
   },
   "checksums": {
-    "mixers.json": "7b3bbd17b375c4b7",
-    "phishing.json": "2abd2528e57cd025",
-    "ofac.json": "6cb0abfe08655dd6",
-    "bridges.json": "ac8b87f38b22f2e6",
     "exploits.json": "57dee06dfb0f08f2",
-    "offramps.json": "1a1876f795ec4887"
+    "mixers.json": "a27cc6d54df56f7b",
+    "phishing.json": "873e84d8ceaea5a1",
+    "offramps.json": "4ddcf3b9d7a15701",
+    "bridges.json": "61a9d0c0858f8125",
+    "ofac.json": "3a7ba510e4e31c0d"
   },
   "consumers": [
     "hash02/aml-roaster"
