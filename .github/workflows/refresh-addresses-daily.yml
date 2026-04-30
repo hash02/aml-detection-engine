@@ -83,5 +83,12 @@ jobs:
           git config user.name "Threat Feed Bot"
           git config user.email "feeds@bionicbanker.tech"
           git add data/feeds/ addresses/
-          git diff --staged --quiet || git commit -m "chore: refresh threat feeds from upstream"
-          git push
+          if git diff --staged --quiet; then
+            echo "No feed changes to commit."
+            exit 0
+          fi
+          git commit -m "chore: refresh threat feeds from upstream"
+          git push || {
+            echo "::warning::Feed refresh succeeded, but GitHub refused to push the generated commit. Check repository Actions write settings or branch protection."
+            exit 0
+          }
