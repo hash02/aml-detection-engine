@@ -11,7 +11,6 @@ Usage:
 """
 
 import argparse
-import io
 import json
 import os
 import sys
@@ -20,8 +19,11 @@ from datetime import datetime
 
 import pandas as pd
 
-# Fix Windows console encoding
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+# Fix Windows console encoding without replacing the stream object.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except AttributeError:
+    pass
 
 # Add parent dir for imports
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

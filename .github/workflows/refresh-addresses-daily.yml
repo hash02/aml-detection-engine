@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   refresh:
@@ -79,18 +78,10 @@ jobs:
           (ADDR / 'MANIFEST.json').write_text(json.dumps(manifest, indent=2))
           PY
 
-      - name: Open PR if changed
-        uses: peter-evans/create-pull-request@v6
-        with:
-          branch: auto/refresh-feeds
-          title: 'chore: refresh threat feeds from upstream'
-          commit-message: 'chore: refresh threat feeds from upstream'
-          body: |
-            Automated daily refresh of OFAC SDN and MetaMask eth-phishing-detect
-            feeds. Updated `addresses/*.json` + regenerated `addresses/MANIFEST.json`
-            with new SHA256 checksums.
-
-            Downstream consumers (aml-roaster) pull on their own cadence.
-          labels: |
-            automated
-            feeds-refresh
+      - name: Commit refreshed feeds
+        run: |
+          git config user.name "Threat Feed Bot"
+          git config user.email "feeds@bionicbanker.tech"
+          git add data/feeds/ addresses/
+          git diff --staged --quiet || git commit -m "chore: refresh threat feeds from upstream"
+          git push
