@@ -32,6 +32,8 @@ It evolved from a traditional AML rule engine (threshold + velocity) into a full
 | Analyst queue reduction (triage) | **63%** |
 | AI-only anomalies found | **21** |
 
+**Rule-count note:** This project tracks 28 detection abilities verified in `RULES_MANIFEST.md`: 23 are direct `detect_` functions listed in the section below, and 5 are feature/classification pipeline stages. `feature: profile classification` is implemented in `etherscan_fetcher.classify_profile()` to classify addresses as exchange, DeFi, EOA, or contract; it is not listed as a standalone rule label in this section. The section below shows 27 named rule labels.
+
 ---
 
 ## Case Studies — Real Exploits, Real Data
@@ -76,7 +78,7 @@ Latest snapshot lives at [](./addresses/) with SHA256 checksums in [](./addresse
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  LAYER 1: Rule Engine v11 — 22 Rules                │
+│  LAYER 1: Rule Engine v11 — 28 detection abilities  │
 │  Known patterns, legally defensible, explainable    │
 │  Fast: O(n log n), deterministic                    │
 ├─────────────────────────────────────────────────────┤
@@ -94,7 +96,7 @@ Latest snapshot lives at [](./addresses/) with SHA256 checksums in [](./addresse
 
 ---
 
-## The 26 Rules
+## The 28 Detection Abilities
 
 **v6 · Core Thresholds**
 `large_amount` · `velocity` · `fan_in` · `structuring`
@@ -148,7 +150,7 @@ Run `python scripts/refresh_feeds.py` (cron-ready) to pull the latest. `FEEDS_OF
 ```
 aml-detection-engine/
 ├── engine/
-│   └── engine_v11_blockchain.py   # Main rule engine — 26 rules, full scoring
+│   └── engine_v11_blockchain.py   # Main rule engine — 23 direct detection functions, full scoring
 ├── ai_layer/
 │   ├── aml_ai_layer.py            # Isolation Forest + graph features
 │   └── triage_labeler.py          # Dynamic confidence scoring (rarity tiers)
@@ -210,7 +212,7 @@ Edit `scripts/generate_cases.py` with your API key — fetches real transaction 
 
 v12 + Phase 2 shipped:
 
-- [x] **Live demo** — Streamlit app with 26 rules + SAR-SF JSON export per alert
+- [x] **Live demo** — Streamlit app with 28 detection abilities + SAR-SF JSON export per alert
 - [x] **GitHub Actions CI** — ruff + pytest on Python 3.11 & 3.12
 - [x] **Live threat-intel feeds** — OFAC, MetaMask phishing, Chainalysis oracle, analyst-curated off-ramps
 - [x] **Password-gated Streamlit** — `AML_APP_PASSWORD` env var; open demo when unset
@@ -295,4 +297,4 @@ This engine is a research and educational tool. It uses synthetic forensic data 
 
 ---
 
-*NEXUS-RISK v11 · Feb 2026 · Detection: 94.9% · Rules: 22 · AI Layer: Live*
+*NEXUS-RISK v11 · Feb 2026 · Detection: 94.9% · 28 detection abilities · AI Layer: Live*
