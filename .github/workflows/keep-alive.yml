@@ -3,7 +3,8 @@ name: Keep Streamlit Demo Alive
 on:
   schedule:
     # Runs every 6 hours — keeps Streamlit from sleeping (free tier sleeps after 12h)
-    - cron: '0 */6 * * *'
+    # Equivalent expression reactivates the inactivity-disabled schedule.
+    - cron: '0 0,6,12,18 * * *'
   workflow_dispatch:  # Allow manual trigger from GitHub Actions tab + phone
 
 jobs:

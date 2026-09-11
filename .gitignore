@@ -25,7 +25,9 @@ output_ai/
 data/audit.db
 data/cases.db
 data/feeds/
-data/monitoring/
+# Publish only the intended Markdown alerts, never transaction exports.
+data/monitoring/*
+!data/monitoring/alert-*.md
 backtest_report.json
 bench_report.json
 pipeline_runs/

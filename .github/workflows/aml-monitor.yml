@@ -2,15 +2,21 @@ name: AML Monitoring
 
 on:
   schedule:
-    - cron: '0 14 * * *'  # Daily 2PM UTC (10AM EST)
+    # Equivalent expression reactivates the inactivity-disabled schedule.
+    - cron: '0 14 * * 0-6'  # Daily 2PM UTC
   workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: aml-generated-data
+  cancel-in-progress: false
+
 jobs:
   monitor:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
