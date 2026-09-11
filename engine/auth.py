@@ -4,8 +4,8 @@ engine/auth.py — Minimal Streamlit auth gate
 
 Password-based gate backed by `AML_APP_PASSWORD` (env) or
 `st.secrets["AML_APP_PASSWORD"]` (Streamlit Cloud). Designed to keep the
-PR scope tight: one password, two roles (analyst / reviewer), session-
-scoped (no persistent user database).
+one shared credential with analyst-only access, session-scoped (no
+persistent user database). Typed usernames are not verified identities.
 
 When `AML_APP_PASSWORD` is unset, the gate is bypassed and every user is
 treated as an anonymous analyst — identical to the current public demo.
@@ -104,11 +104,7 @@ def _admin_usernames() -> set[str]:
 
 
 def _resolve_role(username: str) -> str:
-    """Admins override reviewers; otherwise fall back to analyst."""
-    if username in _admin_usernames():
-        return "admin"
-    if username in _reviewer_usernames():
-        return "reviewer"
+    """A shared password cannot establish a privileged personal identity."""
     return "analyst"
 
 
@@ -136,7 +132,10 @@ def require_auth() -> User:
         return User(username="anonymous", role="analyst", authed_at=time.time())
 
     if st.session_state.get("_auth_user"):
-        return st.session_state["_auth_user"]
+        user = st.session_state["_auth_user"]
+        user = User(user.username, "analyst", user.authed_at)
+        st.session_state["_auth_user"] = user
+        return user
 
     with st.sidebar:
         st.markdown("#### 🔐 Sign in")
@@ -166,7 +165,7 @@ def current_user() -> User:
         import streamlit as st
         u = st.session_state.get("_auth_user")
         if u:
-            return u
+            return User(u.username, "analyst", u.authed_at)
     except Exception:
         pass
     return User(username="anonymous", role="analyst", authed_at=time.time())

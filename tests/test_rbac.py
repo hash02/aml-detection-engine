@@ -47,8 +47,8 @@ def test_admin_username_resolution(monkeypatch):
     monkeypatch.setenv("AML_ADMIN_USERNAMES",    "root,ops")
     monkeypatch.setenv("AML_REVIEWER_USERNAMES", "ops,qa")  # ops is in both
     from engine.auth import _resolve_role
-    # Admin list takes precedence
-    assert _resolve_role("root")    == "admin"
-    assert _resolve_role("ops")     == "admin"
-    assert _resolve_role("qa")      == "reviewer"
+    # Claimed names never elevate a shared-password session.
+    assert _resolve_role("root")    == "analyst"
+    assert _resolve_role("ops")     == "analyst"
+    assert _resolve_role("qa")      == "analyst"
     assert _resolve_role("nobody")  == "analyst"
