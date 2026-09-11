@@ -3,7 +3,8 @@ name: weekly-backtest
 # Every Monday 06:00 UTC. Manual trigger also available.
 on:
   schedule:
-    - cron: "0 6 * * 1"
+    # Equivalent expression reactivates the inactivity-disabled schedule.
+    - cron: "0 6 * * MON"
   workflow_dispatch:
 
 jobs:

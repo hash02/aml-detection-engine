@@ -3,7 +3,8 @@ name: Refresh threat feeds daily
 on:
   schedule:
     # 02:00 UTC daily. Upstream OFAC / MetaMask feeds update asynchronously.
-    - cron: '0 2 * * *'
+    # Equivalent expression reactivates the inactivity-disabled schedule.
+    - cron: '0 2 * * 0-6'
   workflow_dispatch:
 
 permissions:

@@ -2,7 +2,8 @@ name: AML Monitoring
 
 on:
   schedule:
-    - cron: '0 14 * * *'  # Daily 2PM UTC (10AM EST)
+    # Equivalent expression reactivates the inactivity-disabled schedule.
+    - cron: '0 14 * * 0-6'  # Daily 2PM UTC
   workflow_dispatch:
 
 permissions:
