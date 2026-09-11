@@ -15,13 +15,14 @@ Endpoints (all JSON):
 
 Auth:
     Endpoints that mutate server state or read audit data require a
-    bearer token from `AML_API_TOKEN`. When unset, the API is open
-    (dev mode) — identical to the Streamlit gate's fail-open behaviour.
+    bearer token from `AML_API_TOKEN`. When unset, protected routes are
+    unavailable. Public scoring remains available without audit writes.
 """
 
 from __future__ import annotations
 
 import os
+import hmac
 import sys
 import time
 from pathlib import Path
@@ -57,13 +58,15 @@ except Exception:  # noqa: BLE001
 
 
 def _require_token(authorization: str | None = Header(None)) -> None:
-    """Bearer token check; open mode when AML_API_TOKEN unset."""
+    """Require a configured bearer token for protected operations."""
     expected = os.environ.get("AML_API_TOKEN", "")
     if not expected:
-        return
+        raise HTTPException(status_code=503, detail="API authentication is not configured")
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="missing bearer token")
-    if authorization.removeprefix("Bearer ").strip() != expected:
+    if not hmac.compare_digest(
+        authorization.removeprefix("Bearer ").strip().encode(), expected.encode()
+    ):
         raise HTTPException(status_code=403, detail="invalid token")
 
 
@@ -174,7 +177,9 @@ def feeds_refresh() -> dict[str, Any]:
 
 
 @app.post("/score", response_model=ScoreResponse)
-def score(req: ScoreRequest) -> ScoreResponse:
+def score(req: ScoreRequest, authorization: str | None = Header(None)) -> ScoreResponse:
+    if req.write_audit:
+        _require_token(authorization)
     if not req.transactions:
         return ScoreResponse(count=0, flagged=0, aggregate_rate=0.0, results=[])
 
@@ -208,9 +213,12 @@ def score(req: ScoreRequest) -> ScoreResponse:
 
     if req.write_audit:
         try:
-            _AUDIT.record_batch(scored)
+            recorded = _AUDIT.record_batch(scored)
         except Exception:  # noqa: BLE001
-            pass
+            raise HTTPException(status_code=503, detail="Audit persistence failed") from None
+        expected = int(scored["alert"].eq(True).sum())
+        if recorded != expected:
+            raise HTTPException(status_code=503, detail="Audit persistence incomplete")
 
     n  = len(results)
     nf = sum(1 for r in results if r.alert)

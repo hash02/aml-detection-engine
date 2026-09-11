@@ -281,6 +281,24 @@ Still aspirational:
 
 ---
 
+## API audit integrity
+
+Public `/score` requests remain available when `write_audit` is false. Requests
+with `write_audit: true`, audit/case/drift reads, and feed refresh require a bearer
+token matching `AML_API_TOKEN`. If the token is not configured, these protected
+operations return HTTP 503 rather than opening access. Store the token in deployment
+secrets and send it in the Authorization header.
+
+An authenticated scoring request that asks to save alerts returns success only
+when all alert rows were recorded or already exist. Failed or incomplete audit
+writes return HTTP 503. A failed batch may have saved some rows; retrying the same
+transaction inputs is deduplicated by the existing audit store. Scoring thresholds
+and detection rules are unchanged by this boundary.
+
+This is a shared API credential, not per-user identity or a replacement for the
+Streamlit authentication design. CI installs the API dependencies and exercises
+authorization, persistence failures and replay behavior.
+
 ## About
 
 Built by **Bionic Banker** — a financial services professional working at the intersection of traditional finance and blockchain. I work inside legacy financial systems during the day and build the tools that should exist at night.

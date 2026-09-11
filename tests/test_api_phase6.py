@@ -9,14 +9,14 @@ import pytest
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
     pytest.importorskip("fastapi")
     os.environ.setdefault("FEEDS_OFFLINE", "1")
-    os.environ.pop("AML_API_TOKEN", None)
+    monkeypatch.setenv("AML_API_TOKEN", "phase6-test-token")
     import api
     importlib.reload(api)
     from fastapi.testclient import TestClient
-    return TestClient(api.app)
+    return TestClient(api.app, headers={"Authorization": "Bearer phase6-test-token"})
 
 
 def test_score_with_explain_returns_breakdown(client):
@@ -64,7 +64,7 @@ def test_cases_endpoint_returns_queue(client, tmp_path, monkeypatch):
     import api
     importlib.reload(api)
     from fastapi.testclient import TestClient
-    c = TestClient(api.app)
+    c = TestClient(api.app, headers={"Authorization": "Bearer phase6-test-token"})
     r = c.get("/cases")
     assert r.status_code == 200
     body = r.json()
@@ -78,7 +78,7 @@ def test_drift_endpoint_returns_no_alerts_on_empty_db(client, tmp_path, monkeypa
     import api
     importlib.reload(api)
     from fastapi.testclient import TestClient
-    c = TestClient(api.app)
+    c = TestClient(api.app, headers={"Authorization": "Bearer phase6-test-token"})
     r = c.get("/drift")
     assert r.status_code == 200
     body = r.json()
