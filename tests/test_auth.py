@@ -47,3 +47,25 @@ def test_current_user_anonymous_outside_streamlit():
     assert u.username == "anonymous"
     assert u.role == "analyst"
     assert u.is_reviewer is False
+
+
+def test_shared_password_cannot_grant_privileged_role(monkeypatch):
+    import engine.auth as auth
+    monkeypatch.setenv("AML_APP_PASSWORD", "test-shared-password")
+    monkeypatch.setenv("AML_ADMIN_USERNAMES", "admin")
+    monkeypatch.setenv("AML_REVIEWER_USERNAMES", "reviewer")
+    assert auth._check_password("test-shared-password")
+    assert auth._resolve_role("admin") == "analyst"
+    assert auth._resolve_role("reviewer") == "analyst"
+
+
+def test_existing_privileged_shared_session_is_downgraded(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
+    import engine.auth as auth
+    state = {"_auth_user": auth.User("admin", "admin", 1.0)}
+    monkeypatch.setitem(sys.modules, "streamlit", SimpleNamespace(session_state=state))
+    monkeypatch.setattr(auth, "_expected_password", lambda: "test-password")
+    assert auth.current_user().role == "analyst"
+    assert auth.require_auth().role == "analyst"

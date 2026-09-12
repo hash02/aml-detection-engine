@@ -283,6 +283,12 @@ Still aspirational:
 
 ## API audit integrity
 
+Streamlit shared-password logins are analyst-only, including existing sessions.
+`AML_ADMIN_USERNAMES` and `AML_REVIEWER_USERNAMES` no longer elevate a typed name.
+The public demo and scoring remain available. Reviewer/admin controls through
+this login are intentionally unavailable until verified per-user authentication
+is implemented. A displayed username is a label, not verified identity.
+
 Public `/score` requests remain available when `write_audit` is false. Requests
 with `write_audit: true`, audit/case/drift reads, and feed refresh require a bearer
 token matching `AML_API_TOKEN`. If the token is not configured, these protected
