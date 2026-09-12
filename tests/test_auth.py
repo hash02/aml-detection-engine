@@ -62,6 +62,7 @@ def test_shared_password_cannot_grant_privileged_role(monkeypatch):
 def test_existing_privileged_shared_session_is_downgraded(monkeypatch):
     import sys
     from types import SimpleNamespace
+
     import engine.auth as auth
     state = {"_auth_user": auth.User("admin", "admin", 1.0)}
     monkeypatch.setitem(sys.modules, "streamlit", SimpleNamespace(session_state=state))
