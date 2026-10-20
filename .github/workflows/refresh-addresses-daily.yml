@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: aml-generated-data
@@ -83,6 +84,18 @@ jobs:
           (ADDR / 'MANIFEST.json').write_text(json.dumps(manifest, indent=2))
           PY
 
+      - name: Guard against staging ignored paths
+        run: |
+          # Regression guard for the Apr to Jul 2026 failure: the commit
+          # step once staged data/feeds/, which .gitignore excludes, and
+          # `git add` exited 1 on every scheduled run for 91 days.
+          # This workflow must only ever stage addresses/.
+          if git ls-files --others --cached --exclude-standard addresses/ | git check-ignore --stdin > /dev/null 2>&1; then
+            echo "::error::A path under addresses/ is covered by .gitignore and cannot be committed."
+            exit 1
+          fi
+          echo "Staging area is committable."
+
       - name: Commit refreshed feeds
         run: |
           git config user.name "Threat Feed Bot"
@@ -94,3 +107,36 @@ jobs:
           fi
           git commit -m "chore: refresh threat feeds from upstream"
           git push
+
+      - name: Open or update failure issue
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "Threat feed refresh is failing";
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              "The scheduled threat-feed refresh failed.",
+              "",
+              `Run: ${runUrl}`,
+              "",
+              "This issue is maintained by the workflow itself so feed failures cannot pass silently. (The refresh previously failed 91 scheduled runs in a row, Apr to Jul 2026, without any human noticing.)"
+            ].join("\n");
+            const found = await github.rest.search.issuesAndPullRequests({
+              q: `repo:${context.repo.owner}/${context.repo.repo} is:issue is:open in:title "${title}"`
+            });
+            if (found.data.total_count > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: found.data.items[0].number,
+                body
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body
+              });
+            }
