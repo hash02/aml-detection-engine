@@ -2,10 +2,8 @@
 
 > Built by a financial services professional who got tired of seeing compliance tools that didn't understand how crypto actually moves.
 
-[![Detection Rate](https://img.shields.io/badge/Detection%20Rate-94.9%25-brightgreen)](/)
 [![Rules](https://img.shields.io/badge/Rules-28-blue)](/)
 [![AI Layer](https://img.shields.io/badge/AI%20Layer-Isolation%20Forest-purple)](/)
-[![Triage](https://img.shields.io/badge/Triage-63%25%20Queue%20Reduction-orange)](/)
 [![CI](https://github.com/hash02/aml-detection-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/hash02/aml-detection-engine/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](/)
 
@@ -13,7 +11,9 @@
 
 ## What This Is
 
-A working fraud detection engine for blockchain transactions. Not a concept. Not a demo. An actual system that was trained and tested against real Etherscan data from known exploits — Tornado Cash, Ronin Bridge, Lazarus Group, Wormhole, and the Nomad crowd-looting attack.
+A working, rule-based fraud detection engine for blockchain transactions, with an anomaly-detection layer and a triage stage. It was developed against Etherscan data and synthetic forensic reconstructions of known exploits: Tornado Cash, Ronin Bridge, Lazarus Group, Wormhole, and the Nomad crowd-looting attack.
+
+It is a research and portfolio project, not a validated production system. See [Evaluation status](#evaluation-status) and [Limitations](#limitations) for what has and has not been independently reproduced.
 
 It evolved from a traditional AML rule engine (threshold + velocity) into a full 3-layer detection stack: rules → AI anomaly detection → dynamic triage labeling.
 
@@ -21,7 +21,30 @@ It evolved from a traditional AML rule engine (threshold + velocity) into a full
 
 ---
 
-## Results
+## Evaluation status
+
+_Updated 2026-10-20 after an independent review of this repository._
+
+**What is verifiable from this repo today:**
+
+| Item | Status |
+|---|---|
+| Detection abilities | **28** tracked in `RULES_MANIFEST.md` (23 `detect_` functions + 5 pipeline stages) |
+| Anomaly layer | Isolation Forest on graph features (`ai_layer/`) |
+| Tests and CI | Test suite in `tests/`; CI passing on `main` |
+| Data in repo | 254 rows: `data/sample_transactions.csv` (30) + `data/ronin_live_results.csv` (224) |
+
+**What is not yet verifiable:**
+
+- The performance figures below come from an earlier evaluation (February 2026) whose 813-row dataset and labels are not in this repository, so they cannot be regenerated here. This is an evidence gap, not proof that the evaluation never ran.
+- `scripts/backtest.py` reports `detection_rate = flagged / total`. That is an **alert rate**, not a detection rate. Precision and recall need ground-truth labels (a `.expected.json` sidecar), which are not supplied.
+- An offline replay of the 30-row sample (Oct 2026) flagged 30 of 30 rows. The sample has no known benign transactions, so it cannot show whether the engine is selective.
+
+**Next:** a labeled holdout with both benign and suspicious transactions, labels and sampling documented, protocol frozen before scoring, then confusion matrix, precision, recall, false-positive rate and alert rate with exact reproduction commands. New figures will be published only from that run.
+
+### Historical results (February 2026, not reproducible from this repo)
+
+Kept for the record. Treat as unverified until the evaluation above is published.
 
 | Metric | Value |
 |--------|-------|
@@ -36,7 +59,7 @@ It evolved from a traditional AML rule engine (threshold + velocity) into a full
 
 ---
 
-## Case Studies — Real Exploits, Real Data
+#### Historical case studies (same caveat)
 
 | Case | Attack Type | Detection | Notes |
 |------|------------|-----------|-------|
@@ -55,9 +78,13 @@ The 5.1% detection gap is structural — Euler needs block-level timestamps (not
 
 ---
 
+---
+
 ## Live Threat Intelligence
 
-Every 24 hours this engine pulls from three independent sources so the detection surface stays current without manual updates. Nothing is hardcoded past the initial fallback baseline.
+The engine integrates three independent sources, refreshed by a scheduled GitHub Actions workflow.
+
+> **Current status (2026-10-20):** the scheduled refresh workflow has been failing (latest recorded runs in July 2026 failed), and the committed snapshot in `addresses/` was last updated **2026-04-23**. Until the workflow is fixed, detection uses that snapshot, not same-day lists.
 
 | Feed | Source | Purpose |
 |---|---|---|
@@ -67,7 +94,7 @@ Every 24 hours this engine pulls from three independent sources so the detection
 
 Latest snapshot lives at [](./addresses/) with SHA256 checksums in [](./addresses/MANIFEST.json). Downstream consumers (like [aml-roaster](https://github.com/hash02/aml-roaster)) pull this directly on their own schedule.
 
-**What this means in practice:** a new OFAC listing ships into detection within 24 hours with zero human involvement. The engine is not static. If you are showing this to a compliance team, they will care about this.
+**Design intent:** when the refresh workflow runs, a new OFAC listing reaches detection within 24 hours with no manual step.
 
 [![Last refresh](https://img.shields.io/github/actions/workflow/status/hash02/aml-detection-engine/refresh-addresses-daily.yml?branch=main&label=threat%20feeds&logo=github)](https://github.com/hash02/aml-detection-engine/actions/workflows/refresh-addresses-daily.yml)
 
@@ -90,7 +117,7 @@ Latest snapshot lives at [](./addresses/) with SHA256 checksums in [](./addresse
 │  LAYER 3: Dynamic Triage (Item Rarity System)       │
 │  4-dimension confidence scoring                     │
 │  LEGENDARY → RARE → MAGIC → COMMON                 │
-│  695 flagged → 256 high-priority (63% reduction)   │
+│  Historical run: 695 flagged → 256 high-priority   │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -214,7 +241,7 @@ v12 + Phase 2 shipped:
 
 - [x] **Live demo** — Streamlit app with 28 detection abilities + SAR-SF JSON export per alert
 - [x] **GitHub Actions CI** — ruff + pytest on Python 3.11 & 3.12
-- [x] **Live threat-intel feeds** — OFAC, MetaMask phishing, Chainalysis oracle, analyst-curated off-ramps
+- [x] **Threat-intel feed integrations** — OFAC, MetaMask phishing, Chainalysis oracle, analyst-curated off-ramps (scheduled refresh currently failing; see Limitations)
 - [x] **Password-gated Streamlit** — `AML_APP_PASSWORD` env var; open demo when unset
 - [x] **Append-only audit log** — SQLite, dedup by `(tx_id, input_hash)`
 - [x] **Observability** — Sentry (`SENTRY_DSN`), Prometheus (`PROMETHEUS_PORT`), structured logs
@@ -315,10 +342,20 @@ Built by **Bionic Banker** — a financial services professional working at the 
 
 ---
 
+## Limitations
+
+- **Data:** development data mixes real Etherscan rows and synthetic forensic reconstructions. The `label` column (`SYNTH_FORENSIC`, `REAL_DATA`) records provenance, not ground-truth risk.
+- **No validated accuracy:** no labeled benign/suspicious holdout is published yet (see [Evaluation status](#evaluation-status)).
+- **Country field:** `home_country` is `CA`; any other value, including `UNKNOWN` (typical for on-chain rows), counts as foreign. On its own this adds context only, not score.
+- **Threat feeds:** the scheduled refresh is currently failing; the committed snapshot is dated 2026-04-23.
+- **Scope:** triage and education only. It does not accuse, file, freeze, or replace compliance judgment.
+
+---
+
 ## Disclaimer
 
 This engine is a research and educational tool. It uses synthetic forensic data modelled after public post-mortems (Certik, Coinbase Security, Immunefi). It does not constitute financial or legal advice. Real AML compliance requires licensed professionals and regulated systems.
 
 ---
 
-*NEXUS-RISK v11 · Feb 2026 · Detection: 94.9% · 28 detection abilities · AI Layer: Live*
+*NEXUS-RISK v11 · 28 detection abilities · Isolation Forest anomaly layer · Evaluation status updated 2026-10-20*
