@@ -31,7 +31,7 @@ _Updated 2026-10-20 after an independent review of this repository._
 |---|---|
 | Detection abilities | **28** tracked in `RULES_MANIFEST.md` (23 `detect_` functions + 5 pipeline stages) |
 | Anomaly layer | Isolation Forest on graph features (`ai_layer/`) |
-| Tests and CI | Test suite in `tests/`; CI passing on `main` |
+| Tests and CI | Test suite in `tests/`; CI was passing on `main` when this section was written (2026-10-20); see the CI badge for current status |
 | Data in repo | 254 rows: `data/sample_transactions.csv` (30) + `data/ronin_live_results.csv` (224) |
 
 **What is not yet verifiable:**
@@ -73,7 +73,7 @@ Kept for the record. Treat as unverified until the evaluation above is published
 | Vitalik.eth (control) | Legitimate whale | **20.4% FP** | Known wallet, low false flag rate |
 | ETH Foundation (control) | Legitimate institutional | **20.0% FP** | Grant distribution pattern |
 
-The 5.1% detection gap is structural — Euler needs block-level timestamps (not available in hourly Etherscan data), Ronin's intermediaries aren't OFAC-listed. More rules won't close this gap. Better data sources will.
+The historical analysis attributed the 5.1% gap to data limits: Euler likely needs block-level timestamps (not available in hourly Etherscan data), and Ronin's intermediaries aren't OFAC-listed. This explanation has not been re-tested; treat it as a hypothesis until the labeled evaluation is run.
 
 
 ---
@@ -92,7 +92,7 @@ The engine integrates three independent sources, refreshed by a scheduled GitHub
 | MetaMask eth-phishing-detect | [MetaMask/eth-phishing-detect](https://github.com/MetaMask/eth-phishing-detect) (MIT) | Scam and phishing addresses |
 | Chainalysis Sanctions Oracle | On-chain contract, live lookup | Regulatory belt-and-braces |
 
-Latest snapshot lives at [](./addresses/) with SHA256 checksums in [](./addresses/MANIFEST.json). Downstream consumers (like [aml-roaster](https://github.com/hash02/aml-roaster)) pull this directly on their own schedule.
+Latest snapshot lives in [`addresses/`](./addresses/) with SHA256 checksums in [`addresses/MANIFEST.json`](./addresses/MANIFEST.json). Downstream consumers (like [aml-roaster](https://github.com/hash02/aml-roaster)) pull this directly on their own schedule.
 
 **Design intent:** when the refresh workflow runs, a new OFAC listing reaches detection within 24 hours with no manual step.
 
