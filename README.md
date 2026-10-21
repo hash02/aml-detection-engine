@@ -84,7 +84,7 @@ The historical analysis attributed the 5.1% gap to data limits: Euler likely nee
 
 The engine integrates three independent sources, refreshed by a scheduled GitHub Actions workflow.
 
-> **Current status (2026-10-20):** the scheduled refresh workflow has been failing (latest recorded runs in July 2026 failed), and the committed snapshot in `addresses/` was last updated **2026-04-23**. Until the workflow is fixed, detection uses that snapshot, not same-day lists.
+> **Current status (2026-10-20):** the staging guard and failure-alert fix (PR #17) has merged. The scheduled workflow has not run since 2026-07-17 for a reason not yet identified, and the committed snapshot in `addresses/` was last updated **2026-04-23**. Until a supervised run is approved and completed, detection uses that snapshot, not same-day lists.
 
 | Feed | Source | Purpose |
 |---|---|---|
