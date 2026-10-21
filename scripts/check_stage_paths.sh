@@ -12,6 +12,14 @@
 # Exit 0: every path is committable. Exit 1: at least one path is
 # covered by .gitignore. The check runs on the exact pathspecs the
 # caller is about to stage, using git's own ignore semantics.
+#
+# Scope, stated plainly: this checks the staging pathspecs
+# themselves. It does not inspect every file nested inside an
+# allowed directory. That matches the proven failure class (a
+# wholly ignored pathspec aborts `git add`); a partially ignored
+# directory does not abort `git add`, because git stages its
+# non-ignored files. Do not describe this script as proving every
+# possible staging path safe.
 set -euo pipefail
 
 if [ "$#" -eq 0 ]; then
