@@ -8,7 +8,7 @@ pre-built set, so the hot path in detect_* functions is unchanged.
 
 Feeds supported:
   - ofac_sdn         → OFAC SDN virtual-currency addendum (US Treasury)
-  - metamask_phish   → MetaMask eth-phishing-detect blocklist (GitHub)
+  - phishing         → ScamSniffer scam-database address blacklist (GitHub, GPL-3.0)
   - chainalysis      → Chainalysis Sanctions Oracle (on-chain, ETH mainnet)
   - mixers           → Tornado-style privacy pool contracts
   - bridges          → Cross-chain bridge routers
@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -113,22 +114,52 @@ class Feed:
 
 # ── Fetchers (all return lowercased 0x addresses) ────────────────────────────
 
+_ADDR_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
+
+
 def _lower(addrs) -> frozenset[str]:
-    return frozenset(a.lower() for a in addrs if isinstance(a, str) and a.startswith("0x"))
+    # Strict format check, deliberately: a prefix-only check is
+    # what let domain strings from a phishing domain list pass as
+    # addresses (a string like "0x-auth.com" starts with 0x). Only
+    # well-formed addresses survive, here and at cache load.
+    return frozenset(a.lower() for a in addrs
+                     if isinstance(a, str) and _ADDR_RE.match(a))
 
 
-def _fetch_metamask_phish() -> frozenset[str]:
+def _fetch_scamsniffer_phish() -> frozenset[str]:
+    """Phishing and scam addresses from ScamSniffer's database.
+
+    Source: github.com/scamsniffer/scam-database,
+    blacklist/address.json. Data is GPL-3.0; attribution and the
+    license are recorded in addresses/README.md and the snapshot
+    manifest. The publisher discloses that the open data lags its
+    internal database by 7 days; that delay is accepted and
+    recorded with the feed.
+
+    Replaces the MetaMask eth-phishing-detect source, which no
+    longer publishes addresses (its config is a domain detector).
+    The old fetcher's fallback silently filtered that domain list
+    by the "0x" prefix and shipped domain strings as addresses.
+
+    Fails loudly: a non-list payload, zero well-formed addresses,
+    or a mostly malformed payload raises, so the caller keeps the
+    previous cache and the snapshot validator gates any commit.
+    """
     import requests
-    url = "https://raw.githubusercontent.com/MetaMask/eth-phishing-detect/main/src/config.json"
+    url = "https://raw.githubusercontent.com/scamsniffer/scam-database/main/blacklist/address.json"
     r = requests.get(url, timeout=DEFAULT_TIMEOUT)
     r.raise_for_status()
     data = r.json()
-    # The config's "blacklist" is domain-level; addresses come from a sibling file.
-    addrs_url = "https://raw.githubusercontent.com/MetaMask/eth-phishing-detect/main/src/addresses.json"
-    r2 = requests.get(addrs_url, timeout=DEFAULT_TIMEOUT)
-    if r2.ok:
-        return _lower(r2.json())
-    return _lower(data.get("blacklist", []))
+    if not isinstance(data, list):
+        raise ValueError("scamsniffer payload is not a list")
+    addrs = _lower(data)
+    if not addrs:
+        raise ValueError("scamsniffer payload yielded no valid addresses")
+    malformed = len(data) - len(addrs)
+    if malformed > 0.05 * len(data):
+        raise ValueError(
+            f"scamsniffer payload mostly malformed: {malformed}/{len(data)}")
+    return addrs
 
 
 def _fetch_ofac_sdn() -> frozenset[str]:
@@ -157,7 +188,7 @@ def _fetch_chainalysis_oracle() -> frozenset[str]:
 
 FEEDS: dict[str, Feed] = {
     "ofac_sdn":       Feed("ofac_sdn",       BASELINE_OFAC,         _fetch_ofac_sdn),
-    "metamask_phish": Feed("metamask_phish", frozenset(),           _fetch_metamask_phish),
+    "phishing":       Feed("phishing",       frozenset(),           _fetch_scamsniffer_phish),
     "chainalysis":    Feed("chainalysis",    frozenset(),           _fetch_chainalysis_oracle),
     "mixers":         Feed("mixers",         BASELINE_MIXERS,       None),
     "bridges":        Feed("bridges",        BASELINE_BRIDGES,      None),

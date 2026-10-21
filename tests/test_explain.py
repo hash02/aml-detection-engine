@@ -47,7 +47,7 @@ def test_breakdown_matches_score_for_multi_rule_row(row, t0, cfg):
         "tx_count_in_window": 20, "small_tx_count_in_window": 5,
         "small_tx_count_6h": 8, "fan_in_count": 6,
         "ofac_flag": True, "ofac_address": "0xsanctioned",
-        "phish_flag": True, "phish_source": "metamask_phish_receiver",
+        "phish_flag": True, "phish_source": "phishing_receiver",
     })
     assert _breakdown_total(r, cfg) == _score_row(r, cfg)
 

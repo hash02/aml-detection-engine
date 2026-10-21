@@ -130,9 +130,9 @@ class EnrichmentResolver:
             if key in get_feed("ofac_sdn"):
                 return Enrichment(key, "OFAC SDN listed", "sanctioned",
                                   "ofac", 1.0)
-            if key in get_feed("metamask_phish"):
+            if key in get_feed("phishing"):
                 return Enrichment(key, "Phishing / drainer", "phishing",
-                                  "metamask", 0.85)
+                                  "scamsniffer", 0.85)
             if key in get_feed("mixers"):
                 return Enrichment(key, "Privacy mixer contract", "mixer",
                                   "mixers_feed", 0.9)

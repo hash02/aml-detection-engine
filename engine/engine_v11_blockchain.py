@@ -836,7 +836,7 @@ def detect_phish_hit(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
         print("[PHISH]      Phishing / drainer matches: 0 transactions (empty input)")
         return df
 
-    phish_set  = get_feed("metamask_phish")
+    phish_set  = get_feed("phishing")
     offramp    = get_feed("lrt_offramps")
 
     def tag(addr_col: str, source_label: str, addr_set: frozenset[str]) -> None:
@@ -846,8 +846,8 @@ def detect_phish_hit(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
         df.loc[mask, "phish_flag"]   = True
         df.loc[mask, "phish_source"] = source_label
 
-    tag("sender_id",   "metamask_phish_sender",   phish_set)
-    tag("receiver_id", "metamask_phish_receiver", phish_set)
+    tag("sender_id",   "phishing_sender",   phish_set)
+    tag("receiver_id", "phishing_receiver", phish_set)
     tag("sender_id",   "no_kyc_offramp_sender",   offramp)
     tag("receiver_id", "no_kyc_offramp_receiver", offramp)
 

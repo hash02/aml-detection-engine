@@ -46,7 +46,7 @@ jobs:
           ADDR.mkdir(parents=True, exist_ok=True)
           MAPPING = {
               'ofac_sdn':       ('ofac.json',     'https://raw.githubusercontent.com/0xB10C/ofac-sanctioned-digital-currency-addresses'),
-              'metamask_phish': ('phishing.json', 'https://github.com/MetaMask/eth-phishing-detect'),
+              'phishing':       ('phishing.json', 'https://github.com/scamsniffer/scam-database'),
               'mixers':         ('mixers.json',   'engine/feeds.py BASELINE_MIXERS'),
               'bridges':        ('bridges.json',  'engine/feeds.py BASELINE_BRIDGES'),
               'lrt_offramps':   ('offramps.json', 'engine/feeds.py BASELINE_LRT_OFFRAMPS'),
