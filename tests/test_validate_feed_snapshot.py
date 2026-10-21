@@ -98,3 +98,22 @@ def test_emptied_feed_fails(tmp_path):
     _write(repo, "ofac.json", [])
     r = _run(repo)
     assert r.returncode == 1
+
+
+def test_deleted_feed_file_fails(tmp_path):
+    entries = [_addr(i) for i in range(10)]
+    repo = _make_repo(tmp_path, {"ofac.json": entries,
+                                 "phishing.json": entries})
+    (repo / "addresses" / "phishing.json").unlink()
+    r = _run(repo)
+    assert r.returncode == 1
+    assert "phishing.json" in r.stderr and "missing" in r.stderr
+
+
+def test_deleted_manifest_does_not_fail(tmp_path):
+    entries = [_addr(i) for i in range(10)]
+    repo = _make_repo(tmp_path, {"ofac.json": entries,
+                                 "MANIFEST.json": []})
+    (repo / "addresses" / "MANIFEST.json").unlink()
+    r = _run(repo)
+    assert r.returncode == 0, r.stderr
