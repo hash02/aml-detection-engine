@@ -84,23 +84,19 @@ jobs:
           (ADDR / 'MANIFEST.json').write_text(json.dumps(manifest, indent=2))
           PY
 
-      - name: Guard against staging ignored paths
+      - name: Stage refreshed feeds (guarded)
         run: |
-          # Regression guard for the Apr to Jul 2026 failure: the commit
-          # step once staged data/feeds/, which .gitignore excludes, and
-          # `git add` exited 1 on every scheduled run for 91 days.
-          # This workflow must only ever stage addresses/.
-          if git ls-files --others --cached --exclude-standard addresses/ | git check-ignore --stdin > /dev/null 2>&1; then
-            echo "::error::A path under addresses/ is covered by .gitignore and cannot be committed."
-            exit 1
-          fi
-          echo "Staging area is committable."
+          # The staging pathspec is checked with git's own ignore
+          # semantics before staging. This is the exact failure that
+          # broke this workflow for 91 consecutive runs in 2026, when
+          # the commit step staged the gitignored data/feeds/ path.
+          bash scripts/check_stage_paths.sh addresses/
+          git add -- addresses/
 
       - name: Commit refreshed feeds
         run: |
           git config user.name "Threat Feed Bot"
           git config user.email "feeds@bionicbanker.tech"
-          git add addresses/
           if git diff --staged --quiet; then
             echo "No feed changes to commit."
             exit 0
