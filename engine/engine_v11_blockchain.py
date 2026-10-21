@@ -262,7 +262,7 @@ CONFIG = {
 
     # ── v12 NEW Weights ────────────────────────────────────────────────────
     # ABILITY 23: phishing_hit
-    #   Sender or receiver appears in the MetaMask eth-phishing-detect
+    #   Sender or receiver appears in the ScamSniffer scam-database
     #   addresses feed OR an analyst-curated drainer/offramp list. Not a
     #   legal fact like OFAC, so weighted below OFAC but above most rules.
     "w_phishing_hit":          50,
@@ -822,7 +822,7 @@ def detect_phish_hit(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     ABILITY 23 — PHISHING / DRAINER / NO-KYC OFF-RAMP HIT
     ─────────────────────────────────────────────────────────────────
     Sender or receiver appears in:
-      - MetaMask eth-phishing-detect addresses feed
+      - ScamSniffer scam-database addresses feed
       - Analyst-curated drainer / no-KYC offramp list (feeds.lrt_offramps)
 
     Unlike OFAC, these are not legal facts — they're crowd-sourced threat
@@ -836,7 +836,7 @@ def detect_phish_hit(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
         print("[PHISH]      Phishing / drainer matches: 0 transactions (empty input)")
         return df
 
-    phish_set  = get_feed("metamask_phish")
+    phish_set  = get_feed("phishing")
     offramp    = get_feed("lrt_offramps")
 
     def tag(addr_col: str, source_label: str, addr_set: frozenset[str]) -> None:
@@ -846,8 +846,8 @@ def detect_phish_hit(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
         df.loc[mask, "phish_flag"]   = True
         df.loc[mask, "phish_source"] = source_label
 
-    tag("sender_id",   "metamask_phish_sender",   phish_set)
-    tag("receiver_id", "metamask_phish_receiver", phish_set)
+    tag("sender_id",   "phishing_sender",   phish_set)
+    tag("receiver_id", "phishing_receiver", phish_set)
     tag("sender_id",   "no_kyc_offramp_sender",   offramp)
     tag("receiver_id", "no_kyc_offramp_receiver", offramp)
 
@@ -2495,7 +2495,7 @@ def main():
     df = detect_layering_deep(df, cfg)        # 5+ hop extended peel chain
 
     # ── v12 new detectors ──────────────────────────────────────────────────
-    df = detect_phish_hit(df, cfg)                # MetaMask phish + no-KYC offramps
+    df = detect_phish_hit(df, cfg)                # ScamSniffer phish + no-KYC offramps
     df = detect_sub_threshold_tranching(df, cfg)  # deliberate sub-$10k tranching
     df = detect_machine_cadence(df, cfg)          # bot / scheduled-job signatures
     df = detect_sybil_fan_in(df, cfg)             # airdrop-sybil / drainer collectors

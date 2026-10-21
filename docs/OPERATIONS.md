@@ -73,7 +73,7 @@ If `OFAC_SDN_MATCH` or `drainer_signature` drift-alerts:
 | Feed                | Recommended cadence | Source risk |
 |---------------------|---------------------|-------------|
 | `ofac_sdn`          | Daily               | Government mirror — low |
-| `metamask_phish`    | Hourly              | Community list — rotate often |
+| `phishing`          | Daily               | ScamSniffer scam-database (GPL-3.0); open data lags 7 days by publisher disclosure |
 | `chainalysis`       | Per-query (on-chain)| Free oracle |
 | `mixers` / `bridges`| Weekly              | Analyst-maintained |
 
