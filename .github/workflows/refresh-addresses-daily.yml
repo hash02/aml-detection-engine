@@ -84,6 +84,15 @@ jobs:
           (ADDR / 'MANIFEST.json').write_text(json.dumps(manifest, indent=2))
           PY
 
+      - name: Validate refreshed snapshot (data-quality invariant)
+        run: |
+          # Fail the job (which fires the alert issue) if any feed's
+          # new snapshot is junk, emptied, or catastrophically
+          # shrunk versus the committed one. Counts alone proved
+          # nothing in 2026: the committed phishing snapshot held
+          # 189 domain strings and zero valid addresses.
+          python scripts/validate_feed_snapshot.py addresses/
+
       - name: Stage refreshed feeds (guarded)
         run: |
           # The staging pathspec is checked with git's own ignore
