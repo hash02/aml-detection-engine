@@ -21,6 +21,17 @@ Callers use `get_feed(name)` → frozenset[str] of lowercased 0x addresses.
 Offline / air-gapped: the loader never raises on network failure; it
 returns the last cached copy and logs the staleness. CI sets
 `FEEDS_OFFLINE=1` to skip all network calls.
+
+Source precedence in `get_feed()` (highest first):
+  1. Local cache, data/feeds/<feed>.json: the freshest copy, written
+     by `refresh()` on this machine and operator-controlled.
+  2. Committed snapshot, addresses/<file>.json: the repo-committed
+     copy of the feeds, refreshed by the daily workflow. This is the
+     fallback that keeps a fresh deployment (no cache yet) from
+     running on baselines alone.
+  3. Hardcoded baseline below: the never-empty floor bundled in code.
+The baseline is unioned into whichever tier wins, so a feed never
+returns fewer than its bundled entries.
 """
 
 from __future__ import annotations
@@ -38,6 +49,22 @@ log = logging.getLogger(__name__)
 
 FEEDS_DIR = Path(__file__).resolve().parent.parent / "data" / "feeds"
 FEEDS_DIR.mkdir(parents=True, exist_ok=True)
+
+SNAPSHOTS_DIR = Path(__file__).resolve().parent.parent / "addresses"
+
+# Committed snapshot filename per feed key. Mirrors the populate
+# MAPPING in .github/workflows/refresh-addresses-daily.yml, which
+# writes addresses/<file> from the cache of the same feed key; keep
+# the two in sync. "chainalysis" has no snapshot: its fetcher
+# returns empty by design and lookups go through check_chainalysis()
+# per address, so there is nothing for a snapshot to carry.
+SNAPSHOT_FILES: dict[str, str] = {
+    "ofac_sdn": "ofac.json",
+    "phishing": "phishing.json",
+    "mixers": "mixers.json",
+    "bridges": "bridges.json",
+    "lrt_offramps": "offramps.json",
+}
 
 OFFLINE = os.environ.get("FEEDS_OFFLINE") == "1"
 DEFAULT_TIMEOUT = 15
@@ -110,6 +137,11 @@ class Feed:
     @property
     def cache_path(self) -> Path:
         return FEEDS_DIR / f"{self.name}.json"
+
+    @property
+    def snapshot_path(self) -> Path | None:
+        filename = SNAPSHOT_FILES.get(self.name)
+        return SNAPSHOTS_DIR / filename if filename else None
 
 
 # ── Fetchers (all return lowercased 0x addresses) ────────────────────────────
@@ -209,6 +241,24 @@ def _load_cache(feed: Feed) -> tuple[frozenset[str], float]:
         return feed.baseline, 0.0
 
 
+def _load_snapshot(feed: Feed) -> frozenset[str] | None:
+    """Addresses from the committed snapshot, or None if there is no
+    usable snapshot for this feed (no snapshot file mapped, the file
+    is absent, or it is unreadable). Entries pass through the same
+    strict well-formedness filter as cache loads, so a malformed
+    snapshot entry can never reach the engine."""
+    path = feed.snapshot_path
+    if path is None or not path.exists():
+        return None
+    try:
+        blob = json.loads(path.read_text())
+        raw = blob if isinstance(blob, list) else blob.get("addresses", [])
+        return _lower(raw)
+    except (json.JSONDecodeError, ValueError, OSError, AttributeError) as e:
+        log.warning("feed %s snapshot unreadable: %s", feed.name, e)
+        return None
+
+
 def _save_cache(feed: Feed, addrs: frozenset[str]) -> None:
     blob = {
         "feed": feed.name,
@@ -225,15 +275,25 @@ _MEM_CACHE: dict[str, frozenset[str]] = {}
 
 
 def get_feed(name: str) -> frozenset[str]:
-    """Return the current set of addresses for a feed. Never raises."""
+    """Return the current set of addresses for a feed. Never raises
+    for a known feed.
+
+    Precedence (see module docstring): if a local cache file exists
+    it wins and the snapshot is not consulted; with no cache, the
+    committed snapshot is used; with neither, the hardcoded
+    baseline. The baseline is unioned into the winning tier.
+    """
     if name in _MEM_CACHE:
         return _MEM_CACHE[name]
     feed = FEEDS.get(name)
     if feed is None:
         raise KeyError(f"unknown feed: {name}")
-    cached, _ = _load_cache(feed)
-    # Union with baseline so we always have *at least* the bundled entries.
-    combined = feed.baseline | cached
+    if feed.cache_path.exists():
+        cached, _ = _load_cache(feed)
+        combined = feed.baseline | cached
+    else:
+        snapshot = _load_snapshot(feed)
+        combined = feed.baseline | snapshot if snapshot is not None else feed.baseline
     _MEM_CACHE[name] = combined
     return combined
 
