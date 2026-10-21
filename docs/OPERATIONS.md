@@ -55,7 +55,10 @@ This is the on-call guide. If something is on fire, start here.
 ### OFAC feed mirror 404
 
 The 0xB10C mirror occasionally moves. `engine.feeds._fetch_ofac_sdn()`
-swallows the failure and we keep using the bundled baseline. If the
+swallows the failure and we keep using the bundled baseline. Feed
+loading precedence in `get_feed()`: a local cache in `data/feeds/`
+wins; with no cache, the committed snapshot in `addresses/` is used;
+with neither, the bundled baseline. If the
 baseline is stale, update `BASELINE_OFAC` manually from the Treasury
 website.
 
