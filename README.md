@@ -89,7 +89,7 @@ The engine integrates three independent sources, refreshed by a scheduled GitHub
 | Feed | Source | Purpose |
 |---|---|---|
 | OFAC SDN (ethereum) | [0xB10C/ofac-sanctioned-digital-currency-addresses](https://github.com/0xB10C/ofac-sanctioned-digital-currency-addresses) (MIT) | US Treasury sanctions list |
-| MetaMask eth-phishing-detect | [MetaMask/eth-phishing-detect](https://github.com/MetaMask/eth-phishing-detect) (MIT) | Scam and phishing addresses |
+| ScamSniffer scam-database | [scamsniffer/scam-database](https://github.com/scamsniffer/scam-database) (GPL-3.0) | Scam and phishing addresses |
 | Chainalysis Sanctions Oracle | On-chain contract, live lookup | Regulatory belt-and-braces |
 
 Latest snapshot lives in [`addresses/`](./addresses/) with SHA256 checksums in [`addresses/MANIFEST.json`](./addresses/MANIFEST.json). Downstream consumers (like [aml-roaster](https://github.com/hash02/aml-roaster)) pull this directly on their own schedule.
@@ -144,7 +144,7 @@ Latest snapshot lives in [`addresses/`](./addresses/) with SHA256 checksums in [
 `wash_cycle` · `smurfing` · `exit_rush` · `rapid_succession` · `high_risk_country` · `exchange_avoidance` · `layering_deep`
 
 **v12 · Live Feeds + Modern Typologies**
-`phishing_hit` (MetaMask + no-KYC offramps) · `sub_threshold_tranching` (just-under-$10k bunches) · `machine_cadence` (bot-timing signatures) · `sybil_fan_in` (airdrop-sybil / drainer collectors)
+`phishing_hit` (ScamSniffer + no-KYC offramps) · `sub_threshold_tranching` (just-under-$10k bunches) · `machine_cadence` (bot-timing signatures) · `sybil_fan_in` (airdrop-sybil / drainer collectors)
 
 **v13 · Drainer + Multi-Asset**
 `drainer_signature` (Inferno / Angel drainer pattern — approval + multi-asset drain) · `address_poisoning` (0-value lookalike first-4/last-4 match)
@@ -152,7 +152,7 @@ Latest snapshot lives in [`addresses/`](./addresses/) with SHA256 checksums in [
 ### Live threat-intelligence feeds
 The sanctions and phishing lists are now refreshable from the `engine/feeds.py` loader:
 - **OFAC SDN** — 0xB10C community mirror (US Treasury virtual-currency addendum)
-- **MetaMask eth-phishing-detect** — address-level drainer list
+- **ScamSniffer scam-database**: address-level scam and phishing list (GPL-3.0; open data lags 7 days by publisher disclosure)
 - **Chainalysis Sanctions Oracle** — on-chain belt-and-braces check via `CHAINALYSIS_RPC_URL`
 - **Analyst-curated** — no-KYC off-ramps, LRT drainers, mixer/bridge rosters
 
@@ -241,7 +241,7 @@ v12 + Phase 2 shipped:
 
 - [x] **Live demo** — Streamlit app with 28 detection abilities + SAR-SF JSON export per alert
 - [x] **GitHub Actions CI** — ruff + pytest on Python 3.11 & 3.12
-- [x] **Threat-intel feed integrations** — OFAC, MetaMask phishing, Chainalysis oracle, analyst-curated off-ramps (scheduled refresh currently failing; see Limitations)
+- [x] **Threat-intel feed integrations** — OFAC, ScamSniffer phishing, Chainalysis oracle, analyst-curated off-ramps (scheduled refresh currently failing; see Limitations)
 - [x] **Password-gated Streamlit** — `AML_APP_PASSWORD` env var; open demo when unset
 - [x] **Append-only audit log** — SQLite, dedup by `(tx_id, input_hash)`
 - [x] **Observability** — Sentry (`SENTRY_DSN`), Prometheus (`PROMETHEUS_PORT`), structured logs

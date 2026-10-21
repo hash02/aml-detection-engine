@@ -2,7 +2,7 @@ name: Refresh threat feeds daily
 
 on:
   schedule:
-    # 02:00 UTC daily. Upstream OFAC / MetaMask feeds update asynchronously.
+    # 02:00 UTC daily. Upstream OFAC / ScamSniffer feeds update asynchronously.
     # Equivalent expression reactivates the inactivity-disabled schedule.
     - cron: '0 2 * * 0-6'
   workflow_dispatch:
@@ -72,7 +72,7 @@ jobs:
               'source': 'hash02/aml-detection-engine',
               'schema': {
                   'ofac.json': 'OFAC SDN ethereum addresses',
-                  'phishing.json': 'MetaMask eth-phishing-detect aggregate',
+                  'phishing.json': 'ScamSniffer scam-database aggregate (GPL-3.0)',
                   'exploits.json': 'Analyst-curated exploit wallet list',
                   'mixers.json': 'Tornado Cash pools + routers',
                   'bridges.json': 'Cross-chain bridge routers',

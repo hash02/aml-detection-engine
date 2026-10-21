@@ -302,7 +302,7 @@ Algorithm:
 ABILITY 23 — PHISHING / DRAINER / NO-KYC OFF-RAMP HIT
 ─────────────────────────────────────────────────────────────────
 Sender or receiver appears in:
-  - MetaMask eth-phishing-detect addresses feed
+  - ScamSniffer scam-database addresses feed
   - Analyst-curated drainer / no-KYC offramp list (feeds.lrt_offramps)
 
 Unlike OFAC, these are not legal facts — they're crowd-sourced threat
