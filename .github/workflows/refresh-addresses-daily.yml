@@ -3,8 +3,11 @@ name: Refresh threat feeds daily
 on:
   schedule:
     # 02:00 UTC daily. Upstream OFAC / ScamSniffer feeds update asynchronously.
-    # Equivalent expression reactivates the inactivity-disabled schedule.
-    - cron: '0 2 * * 0-6'
+    # 2026-10-21 (C-2): the September equivalent-expression edit did not restore
+    # this workflow's schedule registration while sibling workflows in the same
+    # repo fire on schedule, so the fault is isolated to this registration.
+    # Re-register by returning the expression to its canonical daily form.
+    - cron: '0 2 * * *'
   workflow_dispatch:
 
 permissions:
