@@ -11,13 +11,20 @@
     "bridges.json": "Cross-chain bridge routers",
     "offramps.json": "No-KYC offramps + drainer infrastructure"
   },
+  "feed_updated_at": {
+    "ofac.json": 1792562594.6438897,
+    "phishing.json": 1792562594.7783096,
+    "mixers.json": 1792562594.780238,
+    "bridges.json": 1792562594.780351,
+    "offramps.json": 1792562594.7805977
+  },
   "checksums": {
-    "exploits.json": "57dee06dfb0f08f2",
-    "phishing.json": "f44942f7dc61a5b8",
     "bridges.json": "5fd5dbc1a7d8675a",
-    "ofac.json": "23fc18ef95e3edad",
+    "exploits.json": "57dee06dfb0f08f2",
     "mixers.json": "3638a932768dc9af",
-    "offramps.json": "cd1ae0322db13f98"
+    "ofac.json": "23fc18ef95e3edad",
+    "offramps.json": "cd1ae0322db13f98",
+    "phishing.json": "f44942f7dc61a5b8"
   },
   "consumers": [
     "hash02/aml-roaster"
