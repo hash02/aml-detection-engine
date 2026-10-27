@@ -30,6 +30,10 @@
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
   ul { margin: 6px 0 6px 18px; padding: 0; }
   li { margin: 4px 0; }
+  .case { border:1px solid var(--line); border-radius: 6px; padding: 12px 14px; margin: 10px 0; }
+  .case h3 { margin: 0 0 6px; font-size: 1rem; }
+  .case .meta { color: var(--muted); font-size: 0.9rem; margin: 2px 0; word-break: break-all; }
+  .case .src { font-size: 0.9rem; }
   code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.92em; }
   footer { margin-top: 44px; color: var(--muted); font-size: 0.9rem; border-top: 1px solid var(--line); padding-top: 12px; }
   a { color: var(--accent); }
@@ -87,6 +91,11 @@
     <li>Any detection rate, precision, recall, or false-positive figure. No labelled evaluation against independent ground truth has been completed for this engine.</li>
     <li>Historical figures once shown for this project were computed on data that is not in this repository and cannot be reproduced from it. They are not claimed here.</li>
   </ul>
+  <h2>Verified case files</h2>
+  <p>These are individually documented cases from a labeling pilot: 19 transactions whose labels were researched from named sources, independently checked, and adjudicated. The pilot's blind calibration step is still pending, so no pilot verdict and no detection rate of any kind is claimed from these cases. The 10 pilot rows that failed adjudication were excluded and are not shown as cases.</p>
+  <p id="cases-status">Loading the case files...</p>
+  <div id="cases"></div>
+
   <p>This is a research and portfolio project, not a validated production system.</p>
 
   <footer>
@@ -177,6 +186,37 @@
   inputEl.addEventListener("keydown", function (e) { if (e.key === "Enter") { check(); } });
   Array.prototype.forEach.call(document.querySelectorAll("button.example"), function (b) {
     b.addEventListener("click", function () { inputEl.value = b.getAttribute("data-addr"); check(); });
+  });
+})();
+</script>
+<script>
+(function () {
+  var statusEl = document.getElementById("cases-status");
+  var wrapEl = document.getElementById("cases");
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  fetch("cases.json").then(function (r) {
+    if (!r.ok) { throw new Error("HTTP " + r.status); }
+    return r.json();
+  }).then(function (data) {
+    var cases = (data && Array.isArray(data.cases)) ? data.cases : [];
+    statusEl.textContent = cases.length + " verified cases loaded.";
+    var html = "";
+    cases.forEach(function (c) {
+      html += '<div class="case">'
+        + "<h3>" + esc(c.id) + " &middot; " + esc(c.class) + "</h3>"
+        + '<p class="meta">Address the label is about: <code>' + esc(c.address) + "</code></p>"
+        + '<p class="meta">From <code>' + esc(c.from_address) + "</code> to <code>" + esc(c.to_address) + "</code></p>"
+        + '<p class="meta">Transaction: <code>' + esc(c.tx_hash) + "</code> &middot; " + esc(c.chain) + " &middot; " + esc(c.date) + "</p>"
+        + "<p>" + esc(c.evidence_summary) + "</p>"
+        + '<p class="src">Evidence source: ' + esc(c.evidence_source) + "</p>"
+        + "</div>";
+    });
+    wrapEl.innerHTML = html;
+  }).catch(function (e) {
+    statusEl.textContent = "Could not load the case files (" + e.message + "). They live in docs/cases.json in the repository.";
   });
 })();
 </script>
