@@ -29,7 +29,7 @@ _Updated 2026-10-20 after an independent review of this repository._
 
 | Item | Status |
 |---|---|
-| Detection abilities | **28** tracked in `RULES_MANIFEST.md` (23 `detect_` functions + 5 pipeline stages) |
+| Detection abilities | **28** tracked in `docs/RULES.md` (23 `detect_` functions + 5 pipeline stages) |
 | Anomaly layer | Isolation Forest on graph features (`ai_layer/`) |
 | Tests and CI | Test suite in `tests/`; CI was passing on `main` when this section was written (2026-10-20); see the CI badge for current status |
 | Data in repo | 254 rows: `data/sample_transactions.csv` (30) + `data/ronin_live_results.csv` (224) |
@@ -55,7 +55,7 @@ Kept for the record. Treat as unverified until the evaluation above is published
 | Analyst queue reduction (triage) | **63%** |
 | AI-only anomalies found | **21** |
 
-**Rule-count note:** This project tracks 28 detection abilities verified in `RULES_MANIFEST.md`: 23 are direct `detect_` functions listed in the section below, and 5 are feature/classification pipeline stages. `feature: profile classification` is implemented in `etherscan_fetcher.classify_profile()` to classify addresses as exchange, DeFi, EOA, or contract; it is not listed as a standalone rule label in this section. The section below shows 27 named rule labels.
+**Rule-count note:** This project tracks 28 detection abilities verified in `docs/RULES.md`: 23 are direct `detect_` functions listed in the section below, and 5 are feature/classification pipeline stages. `feature: profile classification` is implemented in `etherscan_fetcher.classify_profile()` to classify addresses as exchange, DeFi, EOA, or contract; it is not listed as a standalone rule label in this section. The section below shows 27 named rule labels.
 
 ---
 

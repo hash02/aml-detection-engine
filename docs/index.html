@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NEXUS-RISK: AML Detection Engine, Snapshot Check</title>
+<style>
+  :root { --ink:#16181b; --muted:#5a6068; --line:#d9dce1; --accent:#0b5cad; --bg:#ffffff; --panel:#f6f7f9; --bad:#9c1c1c; --good:#14632d; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color:var(--ink); background:var(--bg); line-height:1.55; }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 20px 64px; }
+  h1 { font-size: 1.7rem; margin: 0 0 4px; }
+  h2 { font-size: 1.2rem; margin: 36px 0 10px; border-bottom: 2px solid var(--ink); padding-bottom: 4px; }
+  p { margin: 8px 0; }
+  .sub { color: var(--muted); margin-top: 0; }
+  .panel { background: var(--panel); border:1px solid var(--line); border-radius: 8px; padding: 16px; }
+  label { font-weight: 600; display:block; margin-bottom: 6px; }
+  .row { display:flex; gap:8px; flex-wrap: wrap; }
+  input[type="text"] { flex: 1 1 420px; padding: 10px; font-size: 1rem; font-family: ui-monospace, Menlo, Consolas, monospace; border:1px solid var(--line); border-radius: 6px; }
+  button { padding: 10px 16px; font-size: 1rem; border-radius: 6px; border:1px solid var(--ink); background: var(--ink); color:#fff; cursor:pointer; }
+  button.example { background:#fff; color:var(--ink); border-color: var(--line); font-size: 0.9rem; padding: 7px 10px; }
+  #load-status { color: var(--muted); font-size: 0.9rem; margin-top: 8px; }
+  #result { margin-top: 14px; }
+  .hit { border:1px solid var(--bad); background:#fdf1f1; border-radius: 6px; padding: 10px 12px; margin: 8px 0; }
+  .miss { border:1px solid var(--line); background:#fff; border-radius: 6px; padding: 10px 12px; margin: 8px 0; }
+  .invalid { border:1px solid #b26a00; background:#fdf6ec; border-radius: 6px; padding: 10px 12px; margin: 8px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+  th, td { border:1px solid var(--line); padding: 7px 9px; text-align: left; font-size: 0.95rem; }
+  th { background: var(--panel); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  ul { margin: 6px 0 6px 18px; padding: 0; }
+  li { margin: 4px 0; }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.92em; }
+  footer { margin-top: 44px; color: var(--muted); font-size: 0.9rem; border-top: 1px solid var(--line); padding-top: 12px; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>NEXUS-RISK: AML Detection Engine</h1>
+  <p class="sub">An open research project that screens Ethereum addresses against committed threat-intel lists and scores transaction behaviour. This page is the project's public demo: it runs one real check from the engine, in your browser, against the data committed in this repository.</p>
+
+  <h2>Check an address</h2>
+  <div class="panel">
+    <label for="addr">Ethereum address</label>
+    <div class="row">
+      <input type="text" id="addr" placeholder="0x..." autocomplete="off" spellcheck="false">
+      <button id="check" type="button">Check address</button>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <button class="example" type="button" data-addr="0x098b716b8aaf21512996dc57eb0615e2383e2f96">Example: Ronin Bridge exploiter (from config/watchlist.json)</button>
+      <button class="example" type="button" data-addr="0x12d66f87a04a9e220c9d35925b72aca3ca8c78e2">Example: Tornado Cash pool (from addresses/mixers.json)</button>
+    </div>
+    <p id="load-status">Loading the committed lists from the repository...</p>
+    <div id="result" aria-live="polite"></div>
+  </div>
+  <p>This is the same membership check the engine's list rules perform, run against the committed snapshot in <code>addresses/</code> on the <code>main</code> branch. Behavioural scoring needs the address's transaction history and is not part of this page. A "not found" result means only that this snapshot does not list the address. It is not a statement that an address is safe.</p>
+
+  <h2>Status of the committed snapshot</h2>
+  <p>Counts below were computed from the repository files themselves on 27 October 2026 and are hard-coded into this page. They change only when this page is updated. The snapshot date is the manifest date, 21 October 2026 (snapshot manifest version 0.2.0); this page does not claim a fresher refresh than the manifest records.</p>
+  <table>
+    <tr><th>List</th><th>Entries</th><th>Well-formed addresses</th><th>Source (as named in addresses/MANIFEST.json)</th></tr>
+    <tr><td><code>ofac.json</code></td><td class="num">135</td><td class="num">134</td><td>OFAC SDN ethereum addresses</td></tr>
+    <tr><td><code>phishing.json</code></td><td class="num">2,530</td><td class="num">2,530</td><td>ScamSniffer scam-database aggregate (GPL-3.0)</td></tr>
+    <tr><td><code>exploits.json</code></td><td class="num">4</td><td class="num">4</td><td>Analyst-curated exploit wallet list</td></tr>
+    <tr><td><code>mixers.json</code></td><td class="num">8</td><td class="num">8</td><td>Tornado Cash pools + routers</td></tr>
+    <tr><td><code>bridges.json</code></td><td class="num">9</td><td class="num">9</td><td>Cross-chain bridge routers</td></tr>
+    <tr><td><code>offramps.json</code></td><td class="num">3</td><td class="num">3</td><td>No-KYC offramps + drainer infrastructure</td></tr>
+    <tr><th>Total</th><th class="num">2,689</th><th class="num">2,688</th><th></th></tr>
+  </table>
+  <p>One OFAC entry is a truncated string (38 hex characters instead of 40) carried in the upstream data. It can never match a real address, and it is counted above as not well-formed.</p>
+  <ul>
+    <li>Detection rules: <strong>23</strong> <code>detect_</code> functions in <code>engine/engine_v11_blockchain.py</code>, catalogued in <a href="https://github.com/hash02/aml-detection-engine/blob/main/docs/RULES.md">docs/RULES.md</a>.</li>
+    <li>Tests: <strong>166</strong> test functions in <code>tests/</code>.</li>
+    <li>Live workflow status: see the <a href="https://github.com/hash02/aml-detection-engine/actions">GitHub Actions page</a>. This page does not compute it, and badge images can lag the real state.</li>
+  </ul>
+
+  <h2>What is verified, and what is not</h2>
+  <p><strong>Verified, from this repository:</strong></p>
+  <ul>
+    <li>The feed pipeline and the committed snapshot in <code>addresses/</code>, guarded by a fail-closed validator. The counts above were computed from the files themselves.</li>
+    <li>The rule catalog: 23 detection functions, documented in <a href="https://github.com/hash02/aml-detection-engine/blob/main/docs/RULES.md">docs/RULES.md</a>.</li>
+    <li>The test suite: 166 test functions covering the engine, the feeds, and the API.</li>
+  </ul>
+  <p><strong>Not yet verified:</strong></p>
+  <ul>
+    <li>Any detection rate, precision, recall, or false-positive figure. No labelled evaluation against independent ground truth has been completed for this engine.</li>
+    <li>Historical figures once shown for this project were computed on data that is not in this repository and cannot be reproduced from it. They are not claimed here.</li>
+  </ul>
+  <p>This is a research and portfolio project, not a validated production system.</p>
+
+  <footer>
+    Source: <a href="https://github.com/hash02/aml-detection-engine">github.com/hash02/aml-detection-engine</a>. Project code is MIT licensed (see the LICENSE file in the repository). The phishing list contains ScamSniffer data under GPL-3.0 and remains under its own license.
+  </footer>
+</main>
+<script>
+(function () {
+  var BASE = "https://raw.githubusercontent.com/hash02/aml-detection-engine/main/addresses/";
+  var LISTS = [
+    { file: "ofac.json",     name: "OFAC sanctions list" },
+    { file: "phishing.json", name: "Phishing and scam list (ScamSniffer)" },
+    { file: "exploits.json", name: "Exploit wallets (analyst-curated)" },
+    { file: "mixers.json",    name: "Mixers (Tornado Cash pools and routers)" },
+    { file: "bridges.json",   name: "Cross-chain bridge routers" },
+    { file: "offramps.json",  name: "No-KYC off-ramps and drainer infrastructure" }
+  ];
+  var sets = {};       // file -> Set of lowercase addresses
+  var sources = {};    // file -> source description from MANIFEST.json schema
+  var loaded = false;
+
+  var statusEl = document.getElementById("load-status");
+  var resultEl = document.getElementById("result");
+  var inputEl = document.getElementById("addr");
+
+  function fetchJson(url) {
+    return fetch(url).then(function (r) {
+      if (!r.ok) { throw new Error("HTTP " + r.status + " for " + url); }
+      return r.json();
+    });
+  }
+
+  var manifestP = fetchJson(BASE + "MANIFEST.json").then(function (m) {
+    if (m && m.schema) {
+      Object.keys(m.schema).forEach(function (k) { sources[k] = m.schema[k]; });
+    }
+  }).catch(function () { /* fall back to list names only */ });
+
+  var listsP = Promise.all(LISTS.map(function (l) {
+    return fetchJson(BASE + l.file).then(function (d) {
+      var arr = (d && Array.isArray(d.addresses)) ? d.addresses : [];
+      var s = new Set();
+      arr.forEach(function (a) { if (typeof a === "string") { s.add(a.toLowerCase()); } });
+      sets[l.file] = s;
+    });
+  }));
+
+  Promise.all([manifestP, listsP]).then(function () {
+    loaded = true;
+    var total = 0;
+    LISTS.forEach(function (l) { total += sets[l.file] ? sets[l.file].size : 0; });
+    statusEl.textContent = "Lists loaded: " + total.toLocaleString("en-US") + " addresses across " + LISTS.length + " committed lists (snapshot on the main branch).";
+  }).catch(function (e) {
+    statusEl.textContent = "Could not load the lists from GitHub (" + e.message + "). Check your connection and reload the page.";
+  });
+
+  function check() {
+    var raw = inputEl.value.trim();
+    resultEl.innerHTML = "";
+    var valid = /^0x[0-9a-fA-F]{40}$/.test(raw);
+    if (!valid) {
+      resultEl.innerHTML = '<div class="invalid">That does not look like an Ethereum address. An address is <code>0x</code> followed by exactly 40 hexadecimal characters. Check for missing or extra characters and try again.</div>';
+      return;
+    }
+    if (!loaded) {
+      resultEl.innerHTML = '<div class="miss">The lists are still loading. Wait for the loaded message above, then check again.</div>';
+      return;
+    }
+    var needle = raw.toLowerCase();
+    var hits = [];
+    LISTS.forEach(function (l) {
+      if (sets[l.file] && sets[l.file].has(needle)) { hits.push(l); }
+    });
+    if (hits.length === 0) {
+      resultEl.innerHTML = '<div class="miss"><strong>Not found.</strong> ' + raw + ' is not in any of the six committed lists in this snapshot. That is all this check can say; it is not a statement that the address is safe.</div>';
+      return;
+    }
+    var html = "";
+    hits.forEach(function (l) {
+      html += '<div class="hit"><strong>Found in: ' + l.name + '</strong> (<code>' + l.file + '</code>)'
+        + (sources[l.file] ? '<br>Source named in addresses/MANIFEST.json: ' + sources[l.file] : '')
+        + '</div>';
+    });
+    resultEl.innerHTML = html;
+  }
+
+  document.getElementById("check").addEventListener("click", check);
+  inputEl.addEventListener("keydown", function (e) { if (e.key === "Enter") { check(); } });
+  Array.prototype.forEach.call(document.querySelectorAll("button.example"), function (b) {
+    b.addEventListener("click", function () { inputEl.value = b.getAttribute("data-addr"); check(); });
+  });
+})();
+</script>
+</body>
+</html>
