@@ -1,7 +1,7 @@
 {
   "feed": "ofac_sdn",
   "updated_at": 1792562594.6438897,
-  "count": 135,
+  "count": 134,
   "source": "https://raw.githubusercontent.com/0xB10C/ofac-sanctioned-digital-currency-addresses",
   "addresses": [
     "0x0330070fd38ec3bb94f58fa55d40368271e9e54a",
@@ -135,7 +135,6 @@
     "0xf3701f445b6bdafedbca97d1e477357839e4120d",
     "0xf4377eda661e04b6dda78969796ed31658d602d4",
     "0xf45ecc3a59c7911181c659ce9115854c6175be91",
-    "0xf6b5414f23a15c5fe41c37d7c8f7e4adfc30e0c",
     "0xf7b31119c2682c88d88d455dbb9d5932c65cf1be",
     "0xfb3eff152ea55d1bfa04dbdd509a80fd7b72cdeb",
     "0xfda1ec4a6178d4916b001a065422d31ebe5f62ff"
