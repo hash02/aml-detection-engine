@@ -270,7 +270,7 @@ Phase 9 shipped:
 
 - [x] **Subject enrichment** — `engine/enrichment.py` local label DB + feed-backed categories + pluggable provider, TTL-cached
 - [x] **Severity-routed notifications** — `AML_NOTIFY_ROUTING` JSON maps level → channel list (CRITICAL → PagerDuty-via-webhook, WARN → Slack, …)
-- [x] **Weekly backtest automation** — GitHub Action runs Monday 06:00 UTC; opens a regression issue if detection rate drops below 60%
+- [x] **Weekly backtest automation** — GitHub Action runs Monday 06:00 UTC; opens a regression issue if alert rate drops below 60%
 - [x] **Enrichment badges in UI** — each alert shows the sender/receiver category chip at a glance
 
 Still aspirational:
