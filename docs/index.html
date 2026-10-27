@@ -60,15 +60,15 @@
   <p>Counts below were computed from the repository files themselves on 27 October 2026 and are hard-coded into this page. They change only when this page is updated. The snapshot date is the manifest date, 21 October 2026 (snapshot manifest version 0.2.0); this page does not claim a fresher refresh than the manifest records.</p>
   <table>
     <tr><th>List</th><th>Entries</th><th>Well-formed addresses</th><th>Source (as named in addresses/MANIFEST.json)</th></tr>
-    <tr><td><code>ofac.json</code></td><td class="num">135</td><td class="num">134</td><td>OFAC SDN ethereum addresses</td></tr>
+    <tr><td><code>ofac.json</code></td><td class="num">134</td><td class="num">134</td><td>OFAC SDN ethereum addresses</td></tr>
     <tr><td><code>phishing.json</code></td><td class="num">2,530</td><td class="num">2,530</td><td>ScamSniffer scam-database aggregate (GPL-3.0)</td></tr>
     <tr><td><code>exploits.json</code></td><td class="num">4</td><td class="num">4</td><td>Analyst-curated exploit wallet list</td></tr>
     <tr><td><code>mixers.json</code></td><td class="num">8</td><td class="num">8</td><td>Tornado Cash pools + routers</td></tr>
     <tr><td><code>bridges.json</code></td><td class="num">9</td><td class="num">9</td><td>Cross-chain bridge routers</td></tr>
     <tr><td><code>offramps.json</code></td><td class="num">3</td><td class="num">3</td><td>No-KYC offramps + drainer infrastructure</td></tr>
-    <tr><th>Total</th><th class="num">2,689</th><th class="num">2,688</th><th></th></tr>
+    <tr><th>Total</th><th class="num">2,688</th><th class="num">2,688</th><th></th></tr>
   </table>
-  <p>One OFAC entry is a truncated string (38 hex characters instead of 40) carried in the upstream data. It can never match a real address, and it is counted above as not well-formed.</p>
+  <p>Every listed entry is a well-formed address as of the date above. The snapshot is validated on every refresh: the validator tolerates at most 5 percent malformed entries in a feed before it fails the refresh, and the current count of malformed entries is zero.</p>
   <ul>
     <li>Detection rules: <strong>23</strong> <code>detect_</code> functions in <code>engine/engine_v11_blockchain.py</code>, catalogued in <a href="https://github.com/hash02/aml-detection-engine/blob/main/docs/RULES.md">docs/RULES.md</a>.</li>
     <li>Tests: <strong>166</strong> test functions in <code>tests/</code>.</li>
