@@ -90,7 +90,6 @@ BASELINE_OFAC = frozenset({
     "0x974caa59e49682cda0ad2bbe82983419a2ecc400",
     "0x96221423681a6d52e184d440a8efcebb105c7242",
     "0xbdd077f651ebe7f7b3ce16fe5f2b025be2969516",
-    "0xf6b5414f23a15c5fe41c37d7c8f7e4adfc30e0c",
 })
 
 BASELINE_MIXERS = frozenset({
