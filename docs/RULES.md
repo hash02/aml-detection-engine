@@ -227,18 +227,22 @@ precision across many transactions; bots / scheduled jobs do.
 ### `detect_mixer_touch` — Mixer Touch
 
 ```text
-A wallet is mixer-contaminated if:
-  - It sent to a mixer country code (deposit), OR
-  - It received from a mixer country code (withdrawal)
-within the mixer_window_hours lookback.
+A wallet is mixer-contaminated if it shows up on a mixer row.
 
-We build a set of contaminated sender_ids and receiver_ids,
-then flag every row where those wallets appear.
+A mixer row has country in MIXER_COUNTRY_CODES (MX_DARK), or a
+truthy is_known_mixer flag. Missing column, NaN, and false-like
+strings are not mixer rows.
+
+Senders of mixer rows are depositors. Receivers are withdrawers.
+A depositor's later sends are mixer_deposit. A withdrawer's later
+receives are mixer_withdraw, and withdraw overwrites deposit.
 
 Score logic:
   - Deposited INTO mixer  → mixer_deposit  (HIGH)
   - Received FROM mixer   → mixer_withdraw (CRITICAL — clean money exits here)
-  - Transacted WITH a contaminated wallet → mixer_adjacent (MEDIUM)
+
+cfg["mixer_window_hours"] is read and not applied. Row age does
+not filter these flags.
 ```
 
 ### `detect_novel_wallet_dump` — Novel Wallet Dump

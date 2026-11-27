@@ -6,9 +6,9 @@ The blockchain boss fight.
 v7 inherits ALL v6 rules and adds 3 blockchain-native abilities:
 
   🆕 ABILITY 7 — mixer_touch
-     Fires when ANY transaction in the window touches a known mixer address.
-     One hop = HIGH. Wallet that sent to mixer = HIGH.
-     Wallet that received from mixer = CRITICAL.
+     Fires when a row is a known mixer contact (country MX_DARK, or
+     is_known_mixer set). Wallet that sent on that row = HIGH.
+     Wallet that received on that row = CRITICAL.
      (Equivalent: nothing in v6 banking. This is a new weapon.)
 
   🆕 ABILITY 8 — bridge_hop
@@ -511,36 +511,98 @@ def detect_layering(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
 #  "Did this wallet ever touch a mixer?"
 #  Banking analog: nothing. This is a new weapon.
 # ═══════════════════════════════════════════════════════════════
+_MIXER_FLAG_TRUE = {"1", "true", "t", "yes", "y"}
+_MIXER_FLAG_FALSE = {"", "0", "false", "f", "no", "n", "nan", "none", "null", "<na>", "nat"}
+
+
+def _is_known_mixer_mask(df: pd.DataFrame) -> pd.Series:
+    """Rows whose is_known_mixer value is truthy.
+
+    Missing column, None, NaN, blanks, and false-like strings are False.
+    Numeric 0 is False. Other numbers are True. Unrecognized strings are False.
+    """
+    if "is_known_mixer" not in df.columns:
+        return pd.Series(False, index=df.index)
+
+    series = df["is_known_mixer"]
+    if pd.api.types.is_bool_dtype(series):
+        return series.fillna(False).astype(bool)
+
+    def _one(value) -> bool:
+        if value is None or value is pd.NA:
+            return False
+        if isinstance(value, bool):
+            return bool(value)
+        if isinstance(value, str):
+            token = value.strip().lower()
+            if token in _MIXER_FLAG_TRUE:
+                return True
+            if token in _MIXER_FLAG_FALSE:
+                return False
+            try:
+                number = float(token)
+            except ValueError:
+                return False
+            if number != number:  # NaN
+                return False
+            return number != 0.0
+        try:
+            if pd.isna(value):
+                return False
+        except (TypeError, ValueError):
+            return False
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return False
+        if number != number:
+            return False
+        return number != 0.0
+
+    return pd.Series([_one(v) for v in series.tolist()], index=series.index, dtype=bool)
+
+
 def detect_mixer_touch(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     """
-    A wallet is mixer-contaminated if:
-      - It sent to a mixer country code (deposit), OR
-      - It received from a mixer country code (withdrawal)
-    within the mixer_window_hours lookback.
+    A wallet is mixer-contaminated if it shows up on a mixer row.
 
-    We build a set of contaminated sender_ids and receiver_ids,
-    then flag every row where those wallets appear.
+    A mixer row has country in MIXER_COUNTRY_CODES (MX_DARK), or a
+    truthy is_known_mixer flag. Missing column, NaN, and false-like
+    strings are not mixer rows.
+
+    Senders of mixer rows are depositors. Receivers are withdrawers.
+    A depositor's later sends are mixer_deposit. A withdrawer's later
+    receives are mixer_withdraw, and withdraw overwrites deposit.
 
     Score logic:
       - Deposited INTO mixer  → mixer_deposit  (HIGH)
       - Received FROM mixer   → mixer_withdraw (CRITICAL — clean money exits here)
-      - Transacted WITH a contaminated wallet → mixer_adjacent (MEDIUM)
+
+    cfg["mixer_window_hours"] is read and not applied. Row age does
+    not filter these flags.
     """
     df = df.copy()
     df["mixer_flag"]   = False
     df["mixer_type"]   = ""
+    # Lookback is configured and intentionally unused. See the docstring.
     window = timedelta(hours=cfg["mixer_window_hours"])
 
-    # Direct mixer rows: country == MX_DARK
-    mixer_rows = df[df["country"].isin(MIXER_COUNTRY_CODES)]
+    # Mixer rows: country == MX_DARK, or the fetcher's is_known_mixer flag.
+    known_mixer = _is_known_mixer_mask(df)
+    mixer_rows = df[df["country"].isin(MIXER_COUNTRY_CODES) | known_mixer]
 
-    depositors   = set(mixer_rows["sender_id"].tolist())    # sent TO mixer
-    withdrawers  = set(mixer_rows["receiver_id"].tolist())  # received FROM mixer
+    depositors   = set(mixer_rows["sender_id"].tolist())    # senders on mixer rows
+    withdrawers  = set(mixer_rows["receiver_id"].tolist())  # receivers on mixer rows
 
     print(f"[MIXER] Direct contacts — depositors: {len(depositors)} | withdrawers: {len(withdrawers)}")
 
-    # Flag deposits
-    dep_mask = df["sender_id"].isin(depositors) | df["country"].isin(MIXER_COUNTRY_CODES)
+    # Flag deposits. Country and is_known_mixer mark the mixer row itself
+    # even when sender_id is missing (isin drops NaN).
+    dep_mask = (
+        df["sender_id"].isin(depositors)
+        | df["country"].isin(MIXER_COUNTRY_CODES)
+        | known_mixer
+    )
     df.loc[dep_mask, "mixer_flag"] = True
     df.loc[dep_mask & (df["mixer_type"] == ""), "mixer_type"] = "mixer_deposit"
 
