@@ -2,6 +2,8 @@
 
 28 rules, in `score_row` order. Twenty-three are `detect_*` functions. Five are applied inside `score_row` from window features and have no `detect_*` function: `large_amount`, `velocity`, `structuring`, `fan_in`, and `foreign_country`.
 
+Origin notes, with `large_amount` filled as the example and the rest left for Hash: [docs/RULE-RATIONALE.md](RULE-RATIONALE.md).
+
 Profile multipliers apply to the total after the rule points are summed, then the result is rounded:
 
 - `NEW`: 1.20 (`engine/engine_v11_blockchain.py:351`)
