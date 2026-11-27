@@ -19,12 +19,6 @@ from datetime import datetime
 
 import pandas as pd
 
-# Fix Windows console encoding without replacing the stream object.
-try:
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except AttributeError:
-    pass
-
 # Add parent dir for imports
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -55,7 +49,14 @@ def save_watchlist(config: dict):
 
 
 def run_engine_on_df(df: pd.DataFrame, threshold: float = 0.7) -> pd.DataFrame:
-    """Run the 26-rule engine on a DataFrame and return scored results."""
+    """Score a DataFrame with the monitor's 26-rule pipeline (v6 through v12).
+
+    Same detect_* order as the Streamlit app, including the four v12 rules:
+    phishing hit, sub-threshold tranching, machine cadence, and sybil fan-in.
+    detect_phish_hit loads the ScamSniffer and no-KYC off-ramp lists itself.
+    The two v13 rules, detect_drainer_signature and detect_address_poisoning,
+    are not called: they need token fields this fetcher does not supply.
+    """
     from engine_v11_blockchain import (
         CONFIG,
         compute_features,
@@ -69,12 +70,16 @@ def run_engine_on_df(df: pd.DataFrame, threshold: float = 0.7) -> pd.DataFrame:
         detect_high_risk_country,
         detect_layering,
         detect_layering_deep,
+        detect_machine_cadence,
         detect_mixer_touch,
         detect_novel_wallet_dump,
         detect_ofac_hit,
         detect_peel_chain,
+        detect_phish_hit,
         detect_rapid_succession,
         detect_smurfing,
+        detect_sub_threshold_tranching,
+        detect_sybil_fan_in,
         detect_wash_cycle,
         risk_level,
         score_transactions,
@@ -105,6 +110,12 @@ def run_engine_on_df(df: pd.DataFrame, threshold: float = 0.7) -> pd.DataFrame:
     df = detect_high_risk_country(df, cfg)
     df = detect_exchange_avoidance(df, cfg)
     df = detect_layering_deep(df, cfg)
+    # v12 — same call order as streamlit_app.run_engine. Phishing lists
+    # load inside detect_phish_hit; no extra inputs at this call site.
+    df = detect_phish_hit(df, cfg)
+    df = detect_sub_threshold_tranching(df, cfg)
+    df = detect_machine_cadence(df, cfg)
+    df = detect_sybil_fan_in(df, cfg)
     df = score_transactions(df, cfg)
     df["risk_level"] = df["risk_score"].apply(risk_level)
 
@@ -306,6 +317,13 @@ def print_status(config: dict):
 
 
 def main():
+    # Windows consoles default to a legacy code page. Reconfigure only when
+    # this file is the program: doing it at import breaks pytest's capture.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError, ValueError):
+        pass
+
     parser = argparse.ArgumentParser(description="AML Monitoring Pipeline")
     parser.add_argument("--address", type=str, help="Single address to check (bypasses watchlist)")
     parser.add_argument("--api-key", type=str, default=os.environ.get("ETHERSCAN_API_KEY", ""), help="Etherscan API key")
