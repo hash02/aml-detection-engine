@@ -80,7 +80,8 @@ except FileNotFoundError:
 
 
 # ─── 2. COMPUTE SIGNAL DENSITY ───────────────────────────────────────────────
-# Signal density = what % of the 22 rules fired on this transaction?
+# Signal density uses the flag columns below, divided by 19 in code.
+# That divisor is not a count of the 28 scoring rules.
 # Proxy: estimate from rule column booleans in rule engine output
 
 RULE_FLAG_COLS = [

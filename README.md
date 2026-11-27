@@ -29,7 +29,7 @@ _Updated 2026-10-20 after an independent review of this repository._
 
 | Item | Status |
 |---|---|
-| Detection abilities | **28** tracked in `docs/RULES.md` (23 `detect_` functions + 5 pipeline stages) |
+| Detection abilities | **28** scoring rules in `docs/RULES.md` (23 `detect_*` functions + 5 rules inside `score_row`) |
 | Anomaly layer | Isolation Forest on graph features (`ai_layer/`) |
 | Tests and CI | Test suite in `tests/`; CI was passing on `main` when this section was written (2026-10-20); see the CI badge for current status |
 | Data in repo | 254 rows: `data/sample_transactions.csv` (30) + `data/ronin_live_results.csv` (224) |
@@ -48,7 +48,7 @@ The historical results tables that used to sit in this section (the February 202
 
 The standing position of this project is the [Evaluation status](#evaluation-status) section above.
 
-**Rule-count note:** This project tracks 28 detection abilities verified in `docs/RULES.md`: 23 are direct `detect_` functions listed in the section below, and 5 are feature/classification pipeline stages. `feature: profile classification` is implemented in `etherscan_fetcher.classify_profile()` to classify addresses as exchange, DeFi, EOA, or contract; it is not listed as a standalone rule label in this section. The section below shows 27 named rule labels.
+**Rule-count note:** There are 28 scoring rules, listed by name in the section below and in full in `docs/RULES.md`. Twenty-three are `detect_*` functions. Five are applied inside `score_row` from window features: `large_amount`, `velocity`, `structuring`, `fan_in`, and `foreign_country`. Profile classification is not one of the 28. The daily monitor scores 27 of the 28. It does not call `detect_address_poisoning`. `scripts/backtest.py` scores 26. It does not call `detect_drainer_signature` or `detect_address_poisoning`. Streamlit, `pipeline.py`, and the engine CLI call all 28.
 
 ---
 
@@ -98,7 +98,7 @@ Latest snapshot lives in [`addresses/`](./addresses/) with SHA256 checksums in [
 ## The 28 Detection Abilities
 
 **v6 · Core Thresholds**
-`large_amount` · `velocity` · `fan_in` · `structuring`
+`large_amount` · `velocity` · `structuring` · `fan_in` · `foreign_country`
 
 **v7 · Chain-Native**
 `mixer_touch` · `bridge_hop` · `peel_chain` · `layering`
@@ -149,7 +149,7 @@ Run `python scripts/refresh_feeds.py` (cron-ready) to pull the latest. `FEEDS_OF
 ```
 aml-detection-engine/
 ├── engine/
-│   └── engine_v11_blockchain.py   # Main rule engine — 23 direct detection functions, full scoring
+│   └── engine_v11_blockchain.py   # 23 detect_* functions; 28 scoring rules. Catalogue: docs/RULES.md
 ├── ai_layer/
 │   ├── aml_ai_layer.py            # Isolation Forest + graph features
 │   └── triage_labeler.py          # Dynamic confidence scoring (rarity tiers)
@@ -254,7 +254,7 @@ Phase 6 shipped:
 
 Phase 7 shipped:
 
-- [x] **Rule catalogue generator** — `docs/RULES.md` auto-built from docstrings, CI-gated for staleness
+- [x] **Rule catalogue** — `docs/RULES.md` lists the 28 scoring rules by hand. `scripts/gen_rule_catalog.py` can still dump `detect_*` docstrings when given `--out`
 - [x] **Threshold tuning** — `engine/tuning.py` advisory suggestions from disposition history
 - [x] **Operator docs** — `docs/DEPLOYMENT.md`, `OPERATIONS.md`, `MODEL_CARD.md`
 - [x] **Production compose** — `deploy/docker-compose.prod.yml` bundling streamlit + FastAPI + hourly feed refresher

@@ -6,7 +6,7 @@
 2. Click the **+** icon top right → **New repository**
 3. Fill in:
    - Repository name: `aml-detection-engine`
-   - Description: `Blockchain AML fraud detection engine — 22 rules, AI layer, 94.9% detection on real Etherscan data`
+   - Description: `Blockchain AML fraud detection engine. 28 scoring rules, AI layer. Historical detection figures are not reproducible from this repo.`
    - Visibility: **Public** (this is your portfolio)
    - ❌ Do NOT check "Add README" — we already have one
 4. Click **Create repository**
