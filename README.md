@@ -318,7 +318,7 @@ Built by **Bionic Banker** — a financial services professional working at the 
 
 - **Data:** development data mixes real Etherscan rows and synthetic forensic reconstructions. The `label` column (`SYNTH_FORENSIC`, `REAL_DATA`) records provenance, not ground-truth risk.
 - **No validated accuracy:** no labeled benign/suspicious holdout is published yet (see [Evaluation status](#evaluation-status)).
-- **Country field:** `home_country` is `CA`; any other value, including `UNKNOWN` (typical for on-chain rows), counts as foreign. On its own this adds context only, not score.
+- **Country field:** `home_country` is `CA`. A known country other than `CA` counts as foreign and adds `w_foreign` (20) only when another v6 rule also fires. `UNKNOWN` — the value live fetches use when a country cannot be inferred — is not foreign and is not on the high-risk jurisdiction list, so it adds no country points. Real FATF codes, and the mixer label `XX`, still do.
 - **Threat feeds:** the scheduled refresh is currently failing; the committed snapshot is dated 2026-04-23.
 - **Scope:** triage and education only. It does not accuse, file, freeze, or replace compliance judgment.
 

@@ -56,7 +56,8 @@ def score_breakdown(row: dict[str, Any], cfg: dict[str, Any]) -> list[dict[str, 
         parts.append({"rule": "fan_in", "points": cfg["w_fan_in"],
                       "detail": f"{int(row['fan_in_count'])} unique senders"})
 
-    is_foreign = str(row.get("country", "")).upper() != cfg["home_country"].upper()
+    country = str(row.get("country", "")).upper()
+    is_foreign = country != cfg["home_country"].upper() and country != "UNKNOWN"
     other_hit  = any((
         row.get("amount", 0) >= p["large_amount_threshold"],
         row.get("tx_count_in_window", 0) >= p["velocity_tx_count_threshold"],

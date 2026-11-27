@@ -238,11 +238,15 @@ CONFIG = {
 
     # high_risk_country — FATF blacklist / grey list country codes
     # Source: FATF High-Risk and Other Monitored Jurisdictions (2024)
+    # UNKNOWN is not a jurisdiction. Live fetches leave most addresses as
+    # UNKNOWN (etherscan_fetcher.infer_country). Scoring that gap as
+    # high-risk added points to nearly every transaction. XX stays:
+    # known mixers are labeled XX on purpose.
     "high_risk_countries": {
         "KP", "IR", "MM", "SY", "YE", "SD", "LY", "IQ",  # FATF blacklist
         "AF", "AL", "BB", "BF", "CM", "HT", "JM", "JO",  # FATF grey list
         "ML", "MZ", "NG", "PA", "PH", "SN", "SS", "TZ",
-        "TN", "VN", "XX", "UNKNOWN"                        # Unknown = treat as high risk
+        "TN", "VN", "XX",
     },
 
     # exchange_avoidance — known exchange address prefixes / labels
@@ -1832,7 +1836,10 @@ def score_row(row, cfg):
     if row["fan_in_count"] >= cfg["fan_in_threshold"]:
         score += cfg["w_fan_in"]; reasons += "fan_in;"
 
-    is_foreign = str(row["country"]).upper() != cfg["home_country"].upper()
+    # UNKNOWN means the country could not be inferred. That is not evidence
+    # the transfer is outside home_country, so it does not score as foreign.
+    country = str(row["country"]).upper()
+    is_foreign = country != cfg["home_country"].upper() and country != "UNKNOWN"
     other_hit  = (
         row["amount"]                   >= pcfg["large_amount_threshold"] or
         row["tx_count_in_window"]       >= pcfg["velocity_tx_count_threshold"] or
