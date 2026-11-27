@@ -2,8 +2,8 @@
 """
 AML Live Inference Pipeline
 ============================
-Fetches live blockchain transactions → runs AML engine v11 →
-generates risk report → sends summary via Telegram.
+Fetches live blockchain transactions, runs all 28 scoring rules,
+generates a risk report, and sends a summary via Telegram.
 
 All free: Blockscout API (no key), Ollama (local), Telegram bot.
 
@@ -26,15 +26,34 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from scripts.blockscout_fetcher import fetch_and_build
 from engine.engine_v11_blockchain import (
-    load_data, compute_features, detect_layering,
-    detect_mixer_touch, detect_bridge_hops, detect_peel_chain,
-    detect_novel_wallet_dump, detect_concentrated_inflow,
-    detect_ofac_hit, detect_flash_loan_burst, detect_coordinated_burst,
-    detect_dormant_activation, detect_wash_cycle, detect_smurfing,
-    detect_exit_rush, detect_rapid_succession, detect_high_risk_country,
-    detect_exchange_avoidance, detect_layering_deep,
-    score_transactions, risk_level, generate_narratives,
-    format_text_report, CONFIG
+    CONFIG,
+    compute_features,
+    detect_address_poisoning,
+        detect_bridge_hops,
+        detect_concentrated_inflow,
+        detect_coordinated_burst,
+    detect_dormant_activation,
+    detect_drainer_signature,
+    detect_exchange_avoidance,
+    detect_exit_rush,
+    detect_flash_loan_burst,
+    detect_high_risk_country,
+    detect_layering,
+    detect_layering_deep,
+    detect_machine_cadence,
+    detect_mixer_touch,
+    detect_novel_wallet_dump,
+    detect_ofac_hit,
+    detect_peel_chain,
+    detect_phish_hit,
+    detect_rapid_succession,
+    detect_smurfing,
+    detect_sub_threshold_tranching,
+    detect_sybil_fan_in,
+    detect_wash_cycle,
+    format_text_report,
+    generate_narratives,
+    score_transactions,
 )
 
 # Telegram config — opt-in. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
@@ -83,6 +102,44 @@ SUMMARY:"""
         return f"Ollama unavailable: {e}"
 
 
+def apply_rules(df, cfg):
+    """Score a frame with all 28 rules, in score_row order.
+
+    The five feature rules (large_amount, velocity, structuring, fan_in,
+    foreign_country) run inside score_transactions. This list was written
+    for the v11 detectors on 2026-03-23 (commit 1d6dbdb), before v12 and
+    v13 existed. No later commit said to leave the newer rules out.
+    """
+    df = compute_features(df, cfg)
+    df, _cycles = detect_layering(df, cfg)
+    for fn in (
+        detect_mixer_touch,
+        detect_bridge_hops,
+        detect_peel_chain,
+        detect_novel_wallet_dump,
+        detect_concentrated_inflow,
+        detect_ofac_hit,
+        detect_flash_loan_burst,
+        detect_coordinated_burst,
+        detect_dormant_activation,
+        detect_wash_cycle,
+        detect_smurfing,
+        detect_exit_rush,
+        detect_rapid_succession,
+        detect_high_risk_country,
+        detect_exchange_avoidance,
+        detect_layering_deep,
+        detect_phish_hit,
+        detect_sub_threshold_tranching,
+        detect_machine_cadence,
+        detect_sybil_fan_in,
+        detect_drainer_signature,
+        detect_address_poisoning,
+    ):
+        df = fn(df, cfg)
+    return score_transactions(df, cfg)
+
+
 def run_pipeline(address: str, chain_id: int = 1, limit: int = 200, notify: bool = True):
     """Full pipeline: fetch → analyze → report → notify."""
 
@@ -109,7 +166,7 @@ def run_pipeline(address: str, chain_id: int = 1, limit: int = 200, notify: bool
         return None
 
     # Step 2: Run engine detectors
-    print("[2/5] Running AML engine v11...")
+    print("[2/5] Running all 28 scoring rules...")
     try:
         cfg = CONFIG.copy()
         cfg["input_file"] = csv_path
@@ -121,25 +178,7 @@ def run_pipeline(address: str, chain_id: int = 1, limit: int = 200, notify: bool
                 send_telegram(msg)
             return None
 
-        df = compute_features(df, cfg)
-        df, _cycles = detect_layering(df, cfg)
-        df = detect_mixer_touch(df, cfg)
-        df = detect_bridge_hops(df, cfg)
-        df = detect_peel_chain(df, cfg)
-        df = detect_novel_wallet_dump(df, cfg)
-        df = detect_concentrated_inflow(df, cfg)
-        df = detect_ofac_hit(df, cfg)
-        df = detect_flash_loan_burst(df, cfg)
-        df = detect_coordinated_burst(df, cfg)
-        df = detect_dormant_activation(df, cfg)
-        df = detect_wash_cycle(df, cfg)
-        df = detect_smurfing(df, cfg)
-        df = detect_exit_rush(df, cfg)
-        df = detect_rapid_succession(df, cfg)
-        df = detect_high_risk_country(df, cfg)
-        df = detect_exchange_avoidance(df, cfg)
-        df = detect_layering_deep(df, cfg)
-        df = score_transactions(df, cfg)
+        df = apply_rules(df, cfg)
     except Exception as e:
         error_msg = f"[PIPELINE FAILED] Engine error: {e}"
         print(error_msg)

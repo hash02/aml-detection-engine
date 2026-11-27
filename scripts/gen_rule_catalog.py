@@ -2,21 +2,13 @@
 scripts/gen_rule_catalog.py — Auto-generate rule catalogue from docstrings
 ==========================================================================
 
-Every detector in engine/engine_v11_blockchain.py starts with a
-structured docstring that explains what the rule does, what pattern
-it catches, and the config knobs that drive it. This script scans
-those docstrings and emits `docs/RULES.md` — a human-readable catalogue
-that compliance analysts can consult without opening Python.
-
-Keeps documentation in sync with code by construction: the catalogue
-is generated from the source of truth. A CI step (`make rules`) can
-diff the committed catalogue against a freshly-generated one to block
-PRs that forget to refresh it.
+docs/RULES.md is hand-maintained and lists all 28 scoring rules.
+This script only dumps detect_* docstrings when --out is given.
+It does not write docs/RULES.md.
 
 Usage:
-  python scripts/gen_rule_catalog.py            # writes docs/RULES.md
-  python scripts/gen_rule_catalog.py --out X    # custom path
-  python scripts/gen_rule_catalog.py --check    # exit != 0 if stale
+  python scripts/gen_rule_catalog.py --out /tmp/detectors.md
+  python scripts/gen_rule_catalog.py --out /tmp/detectors.md --check
 """
 
 from __future__ import annotations
@@ -29,7 +21,6 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ENGINE_PATH = REPO_ROOT / "engine" / "engine_v11_blockchain.py"
-DEFAULT_OUT = REPO_ROOT / "docs" / "RULES.md"
 
 
 def extract_detectors(source: str) -> list[tuple[str, str]]:
@@ -66,11 +57,19 @@ def build_catalog(source: str) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", type=Path, default=DEFAULT_OUT,
-                    help="Output path for the generated catalogue")
+    ap.add_argument("--out", type=Path, default=None,
+                    help="Write a detect_* docstring dump to this path")
     ap.add_argument("--check", action="store_true",
-                    help="Exit non-zero if the committed catalogue is stale")
+                    help="Exit non-zero if --out does not match a fresh dump")
     args = ap.parse_args()
+
+    if args.out is None:
+        print(
+            "docs/RULES.md is hand-maintained (28 scoring rules). "
+            "Pass --out PATH to write a detect_* docstring dump.",
+            file=sys.stderr,
+        )
+        return 2
 
     source = ENGINE_PATH.read_text()
     new = build_catalog(source)

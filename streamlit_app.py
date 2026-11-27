@@ -418,7 +418,7 @@ with st.sidebar:
         NEXUS<span style='color: #5b73f8;'>-RISK</span>
       </span><br>
       <span style='font-size: 0.75rem; color: #505068; letter-spacing: 0.06em; text-transform: uppercase;'>
-        AML Engine v11 · 22 Rules
+        AML Engine v11 · 28 Rules
       </span>
     </div>
     """, unsafe_allow_html=True)
@@ -504,7 +504,7 @@ st.markdown("""
     Blockchain AML Detection Engine
   </h1>
   <p style='color: #8a8aa0; margin-top: 0.5rem; font-size: 0.95rem; line-height: 1.7;'>
-    22 detection rules. Real blockchain transaction patterns. The same engine that caught Tornado Cash,
+    28 detection rules. Real blockchain transaction patterns. The same engine that caught Tornado Cash,
     Ronin, Lazarus Group, Wormhole, and Nomad — running live in your browser.
   </p>
 </div>

@@ -74,7 +74,7 @@
   </table>
   <p>Every listed entry is a well-formed address as of the date above. The snapshot is validated on every refresh: the validator tolerates at most 5 percent malformed entries in a feed before it fails the refresh, and the current count of malformed entries is zero.</p>
   <ul>
-    <li>Detection rules: <strong>23</strong> <code>detect_</code> functions in <code>engine/engine_v11_blockchain.py</code>, catalogued in <a href="https://github.com/hash02/aml-detection-engine/blob/main/docs/RULES.md">docs/RULES.md</a>.</li>
+    <li>Detection rules: <strong>28</strong> scoring rules (23 <code>detect_</code> functions plus 5 rules inside <code>score_row</code>), catalogued in <a href="https://github.com/hash02/aml-detection-engine/blob/main/docs/RULES.md">docs/RULES.md</a>. The daily monitor runs 27. It does not call <code>address_poisoning</code>.</li>
     <li>Tests: <strong>166</strong> test functions in <code>tests/</code>.</li>
     <li>Live workflow status: see the <a href="https://github.com/hash02/aml-detection-engine/actions">GitHub Actions page</a>. This page does not compute it, and badge images can lag the real state.</li>
   </ul>
@@ -83,7 +83,7 @@
   <p><strong>Verified, from this repository:</strong></p>
   <ul>
     <li>The feed pipeline and the committed snapshot in <code>addresses/</code>, guarded by a fail-closed validator. The counts above were computed from the files themselves.</li>
-    <li>The rule catalog: 23 detection functions, documented in <a href="https://github.com/hash02/aml-detection-engine/blob/main/docs/RULES.md">docs/RULES.md</a>.</li>
+    <li>The rule catalog: 28 scoring rules, documented in <a href="https://github.com/hash02/aml-detection-engine/blob/main/docs/RULES.md">docs/RULES.md</a>.</li>
     <li>The test suite: 166 test functions covering the engine, the feeds, and the API.</li>
   </ul>
   <p><strong>Not yet verified:</strong></p>

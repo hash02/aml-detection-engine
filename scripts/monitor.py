@@ -58,6 +58,8 @@ def run_engine_on_df(df: pd.DataFrame, threshold: float = 0.7) -> pd.DataFrame:
     """Score a DataFrame with the detectors the daily monitor runs.
 
     Calls 22 of the 23 detect_* functions, then score_transactions.
+    score_transactions also applies the five rules that have no detect_*
+    function, so this path scores 27 of the 28 rules.
     detect_phish_hit loads the phishing and no-KYC offramp feeds itself.
     detect_drainer_signature runs when asset_type is present. The fetchers
     add that column on native rows and on ERC-20 transfers.

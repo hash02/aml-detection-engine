@@ -1,7 +1,15 @@
 """
-NEXUS-RISK AML Engine — v7 (Blockchain Layer)
-==============================================
-The blockchain boss fight.
+NEXUS-RISK AML Engine
+=====================
+This module scores 28 rules. Five are applied inside score_row from
+window features: large_amount, velocity, structuring, fan_in, and
+foreign_country. The other 23 are detect_* functions. Profile multipliers
+(NEW 1.20, PERSONAL_LIKE 1.00, BUSINESS_LIKE 0.85) apply to the total.
+The catalogue is docs/RULES.md. The daily monitor scores 27 of the 28.
+It does not call detect_address_poisoning.
+
+The notes below are the original v7 blockchain-layer writeup. They
+describe the first three chain-native rules, not the current total.
 
 v7 inherits ALL v6 rules and adds 3 blockchain-native abilities:
 
@@ -2469,7 +2477,7 @@ def print_quick_metrics(df, narratives, metrics):
 # MAIN
 # ─────────────────────────────────────────────
 def main():
-    parser = argparse.ArgumentParser(description="NEXUS-RISK AML Engine v7 — Blockchain")
+    parser = argparse.ArgumentParser(description="NEXUS-RISK AML Engine: 28 scoring rules")
     parser.add_argument("--input", default=CONFIG["input_file"])
     args = parser.parse_args()
 
