@@ -410,8 +410,118 @@ def build_transaction_rows(raw_txns: list, eth_price: float, source_address: str
             "sender_tx_count":    0,
             "sender_avg_amount":  0.0,
             "sender_active_days": 0.0,
+            "asset_type":     "native",
+            "token_contract": "",
+            "token_symbol":   "ETH",
+            "token_amount_decimal": value_wei / 1e18,
         })
 
+    return rows
+
+
+# Stablecoins priced at $1. Wrapped ETH priced at the spot ETH price.
+# Anything else is left at $0: the drainer rule keys off token_contract,
+# not the dollar amount.
+_STABLE_SYMBOLS = {"USDC", "USDT", "DAI", "FRAX", "LUSD", "TUSD", "USDP"}
+_ETH_LIKE_SYMBOLS = {"WETH", "STETH", "RETH"}
+
+
+def fetch_etherscan_tokentx(address: str, api_key: str, limit: int = 500) -> list:
+    """One Etherscan V2 `tokentx` call for ERC-20 transfers.
+
+    Returns [] when there is no API key, the address has no token
+    transfers, or the call fails. Native history is unaffected.
+    This is an extra request per seed address (free tier is 5 calls/sec).
+    """
+    if not api_key:
+        print(f"[FETCH] {address[:10]}... tokentx skipped (no Etherscan API key)")
+        return []
+    # txlist for this address just ran. Pause so the pair stays under 5/sec.
+    time.sleep(0.25)
+    try:
+        resp = SESSION.get(
+            ETHERSCAN_V2_URL,
+            params={
+                "chainid": 1,
+                "module": "account",
+                "action": "tokentx",
+                "address": address,
+                "page": 1,
+                "offset": min(limit, 10000),
+                "sort": "asc",
+                "apikey": api_key,
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        result = data.get("result")
+        if data.get("status") != "1" or not isinstance(result, list):
+            message = data.get("message", "no token transfers")
+            print(f"[FETCH] {address[:10]}... tokentx: {message}")
+            return []
+        print(f"[FETCH] {address[:10]}... → {len(result)} token transfers (Etherscan tokentx)")
+        return result
+    except Exception as e:
+        print(f"[FETCH] tokentx failed ({e}); continuing with native transfers")
+        return []
+
+
+def build_token_rows(raw_token_txns: list, eth_price: float) -> list:
+    """Map Etherscan tokentx rows onto the engine schema.
+
+    `id` is `hash:token_contract` so two assets moved by one transaction
+    both survive deduplication, and so a token row does not collide with
+    the native row that shares the hash.
+    """
+    rows = []
+    for tx in raw_token_txns:
+        sender = str(tx.get("from", "")).lower()
+        receiver = str(tx.get("to", "")).lower()
+        contract = str(tx.get("contractAddress", "")).lower()
+        if not sender or not receiver or not contract:
+            continue
+        try:
+            decimals = int(tx.get("tokenDecimal") or 18)
+            raw_amt = int(tx.get("value") or 0)
+        except (ValueError, TypeError):
+            continue
+        if raw_amt <= 0:
+            continue
+        token_amt = raw_amt / (10 ** decimals) if decimals >= 0 else float(raw_amt)
+        symbol = str(tx.get("tokenSymbol") or "").upper()
+        if symbol in _STABLE_SYMBOLS:
+            usd = token_amt
+        elif symbol in _ETH_LIKE_SYMBOLS:
+            usd = token_amt * eth_price
+        else:
+            usd = 0.0
+        try:
+            ts = datetime.utcfromtimestamp(int(tx["timeStamp"]))
+        except (ValueError, TypeError, KeyError):
+            continue
+        tx_hash = str(tx.get("hash") or "")
+        is_mixer = sender in KNOWN_MIXERS or receiver in KNOWN_MIXERS
+        is_bridge = sender in KNOWN_BRIDGES or receiver in KNOWN_BRIDGES
+        rows.append({
+            "id": f"{tx_hash}:{contract}" if tx_hash else "",
+            "sender_id": sender,
+            "receiver_id": receiver,
+            "amount": round(usd, 2),
+            "country": infer_country(sender),
+            "timestamp": ts,
+            "label": "LIVE",
+            "sender_profile": classify_profile(sender, False),
+            "is_known_mixer": is_mixer,
+            "is_bridge": is_bridge,
+            "sender_tx_count": 0,
+            "sender_avg_amount": 0.0,
+            "sender_active_days": 0.0,
+            "asset_type": "erc20",
+            "token_contract": contract,
+            "token_symbol": symbol,
+            "token_amount_decimal": token_amt,
+        })
     return rows
 
 
@@ -535,27 +645,29 @@ def fetch_live_data(
         if not api_key:
             time.sleep(0.3)   # free tier rate limit buffer
 
-    if not all_raw:
-        print("[ERROR] No transactions fetched. Check addresses and API key.")
-        return pd.DataFrame()
-
-    # Step 3: Optionally expand one hop deeper for graph detection
-    if expand_hops and len(all_raw) < 2000:
+    # Step 3: Optionally expand one hop deeper for graph detection.
+    # Hop addresses are not sent to tokentx. That would add up to 20
+    # extra Etherscan calls. The daily monitor sets expand_hops=False.
+    if expand_hops and all_raw and len(all_raw) < 2000:
         print(f"\n[GRAPH] Expanding one hop from {len(all_raw)} seed transactions...")
         all_raw = expand_graph(all_raw, api_key)
 
-    # Step 4: Deduplicate
-    all_raw = deduplicate(all_raw)
-    print(f"[DEDUP] {len(all_raw)} unique transactions")
-
-    # Step 5: Convert to engine schema
+    # Step 4: Native rows, then one tokentx call per seed address.
     all_rows = []
-    for addr in addresses:
-        # Build rows using the specific seed address as context
-        rows = build_transaction_rows(all_raw, eth_price, addr.lower())
-        all_rows.extend(rows)
+    if all_raw:
+        all_raw = deduplicate(all_raw)
+        print(f"[DEDUP] {len(all_raw)} unique transactions")
+        for addr in addresses:
+            rows = build_transaction_rows(all_raw, eth_price, addr.lower())
+            all_rows.extend(rows)
 
-    # Re-deduplicate after building rows
+    if api_key:
+        for addr in addresses:
+            raw_tokens = fetch_etherscan_tokentx(addr.lower(), api_key, limit=limit)
+            all_rows.extend(build_token_rows(raw_tokens, eth_price))
+
+    # Re-deduplicate after building rows. Token ids include the contract,
+    # so a multi-asset transaction is not collapsed to one row.
     df = pd.DataFrame(deduplicate(all_rows))
     if df.empty:
         print("[ERROR] No valid transactions after filtering.")

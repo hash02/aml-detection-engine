@@ -57,10 +57,11 @@ def save_watchlist(config: dict):
 def run_engine_on_df(df: pd.DataFrame, threshold: float = 0.7) -> pd.DataFrame:
     """Score a DataFrame with the detectors the daily monitor runs.
 
-    Calls 21 of the 23 detect_* functions, then score_transactions.
+    Calls 22 of the 23 detect_* functions, then score_transactions.
     detect_phish_hit loads the phishing and no-KYC offramp feeds itself.
-    detect_drainer_signature and detect_address_poisoning are not called.
-    The drainer rule needs token fields this pipeline does not have.
+    detect_drainer_signature runs when asset_type is present. The fetchers
+    add that column on native rows and on ERC-20 transfers.
+    detect_address_poisoning is not called.
     """
     from engine_v11_blockchain import (
         CONFIG,
@@ -69,6 +70,7 @@ def run_engine_on_df(df: pd.DataFrame, threshold: float = 0.7) -> pd.DataFrame:
         detect_concentrated_inflow,
         detect_coordinated_burst,
         detect_dormant_activation,
+        detect_drainer_signature,
         detect_exchange_avoidance,
         detect_exit_rush,
         detect_flash_loan_burst,
@@ -119,6 +121,7 @@ def run_engine_on_df(df: pd.DataFrame, threshold: float = 0.7) -> pd.DataFrame:
     df = detect_sub_threshold_tranching(df, cfg)
     df = detect_machine_cadence(df, cfg)
     df = detect_sybil_fan_in(df, cfg)
+    df = detect_drainer_signature(df, cfg)
     df = score_transactions(df, cfg)
     df["risk_level"] = df["risk_score"].apply(risk_level)
 

@@ -11,7 +11,6 @@ Usage:
 """
 
 import argparse
-import io
 import os
 import sys
 import time
@@ -20,8 +19,12 @@ from datetime import datetime
 import pandas as pd
 import requests
 
-# Fix Windows console encoding
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+# Match scripts/monitor.py: reconfigure in place. Replacing stdout closes
+# the stream pytest is capturing.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except (AttributeError, ValueError):
+    pass
 
 # Add parent dir for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -197,8 +200,75 @@ def build_rows_from_blockscout(txns: list, eth_price: float) -> list:
             "sender_tx_count": 0,
             "sender_avg_amount": 0.0,
             "sender_active_days": 0.0,
+            "asset_type": "native",
+            "token_contract": "",
+            "token_symbol": "ETH",
+            "token_amount_decimal": value_wei / 1e18,
         })
 
+    return rows
+
+
+def build_rows_from_blockscout_tokens(transfers: list) -> list:
+    """Map Blockscout token-transfer items onto the engine schema.
+
+    ERC-20 only. `id` includes the token contract and log index so several
+    assets in one transaction stay as separate rows.
+    """
+    rows = []
+    for tx in transfers:
+        token = tx.get("token") or {}
+        token_type = str(token.get("type") or "ERC-20").upper().replace("-", "")
+        if token_type not in {"ERC20"}:
+            continue
+        sender = ((tx.get("from") or {}).get("hash") or "").lower()
+        receiver = ((tx.get("to") or {}).get("hash") or "").lower()
+        contract = (token.get("address") or "").lower()
+        if not sender or not receiver or not contract:
+            continue
+        total = tx.get("total") or {}
+        try:
+            decimals = int(token.get("decimals") or total.get("decimals") or 18)
+            raw_amt = int(total.get("value") or 0)
+        except (ValueError, TypeError):
+            continue
+        if raw_amt <= 0:
+            continue
+        token_amt = raw_amt / (10 ** decimals) if decimals >= 0 else float(raw_amt)
+        symbol = str(token.get("symbol") or "").upper()
+        rate = token.get("exchange_rate")
+        try:
+            usd = token_amt * float(rate) if rate not in (None, "") else 0.0
+        except (TypeError, ValueError):
+            usd = 0.0
+        try:
+            ts_str = tx.get("timestamp", "")
+            ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00")).replace(tzinfo=None)
+        except (ValueError, TypeError, AttributeError):
+            continue
+        tx_hash = tx.get("tx_hash") or ""
+        log_index = tx.get("log_index", "")
+        is_mixer = sender in KNOWN_MIXERS or receiver in KNOWN_MIXERS
+        is_bridge = sender in KNOWN_BRIDGES or receiver in KNOWN_BRIDGES
+        rows.append({
+            "id": f"{tx_hash}:{contract}:{log_index}" if tx_hash else "",
+            "sender_id": sender,
+            "receiver_id": receiver,
+            "amount": round(usd, 2),
+            "country": infer_country(sender),
+            "timestamp": ts,
+            "label": "BLOCKSCOUT",
+            "sender_profile": classify_profile(sender, False),
+            "is_known_mixer": is_mixer,
+            "is_bridge": is_bridge,
+            "sender_tx_count": 0,
+            "sender_avg_amount": 0.0,
+            "sender_active_days": 0.0,
+            "asset_type": "erc20",
+            "token_contract": contract,
+            "token_symbol": symbol,
+            "token_amount_decimal": token_amt,
+        })
     return rows
 
 
@@ -218,11 +288,10 @@ def fetch_and_build(
     eth_price = get_eth_price_usd()
 
     raw_txns = fetch_blockscout_transactions(address, chain_id, limit)
-    if not raw_txns:
-        print("[ERROR] No transactions fetched.")
-        return pd.DataFrame()
-
-    rows = build_rows_from_blockscout(raw_txns, eth_price)
+    rows = build_rows_from_blockscout(raw_txns, eth_price) if raw_txns else []
+    # One extra Blockscout request (paginated). Not an Etherscan call.
+    raw_tokens = fetch_blockscout_token_transfers(address, chain_id, limit)
+    rows.extend(build_rows_from_blockscout_tokens(raw_tokens))
     rows = deduplicate(rows)
 
     if not rows:
