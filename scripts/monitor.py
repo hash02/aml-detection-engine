@@ -55,7 +55,13 @@ def save_watchlist(config: dict):
 
 
 def run_engine_on_df(df: pd.DataFrame, threshold: float = 0.7) -> pd.DataFrame:
-    """Run the 26-rule engine on a DataFrame and return scored results."""
+    """Score a DataFrame with the detectors the daily monitor runs.
+
+    Calls 21 of the 23 detect_* functions, then score_transactions.
+    detect_phish_hit loads the phishing and no-KYC offramp feeds itself.
+    detect_drainer_signature and detect_address_poisoning are not called.
+    The drainer rule needs token fields this pipeline does not have.
+    """
     from engine_v11_blockchain import (
         CONFIG,
         compute_features,
@@ -69,12 +75,16 @@ def run_engine_on_df(df: pd.DataFrame, threshold: float = 0.7) -> pd.DataFrame:
         detect_high_risk_country,
         detect_layering,
         detect_layering_deep,
+        detect_machine_cadence,
         detect_mixer_touch,
         detect_novel_wallet_dump,
         detect_ofac_hit,
         detect_peel_chain,
+        detect_phish_hit,
         detect_rapid_succession,
         detect_smurfing,
+        detect_sub_threshold_tranching,
+        detect_sybil_fan_in,
         detect_wash_cycle,
         risk_level,
         score_transactions,
@@ -105,6 +115,10 @@ def run_engine_on_df(df: pd.DataFrame, threshold: float = 0.7) -> pd.DataFrame:
     df = detect_high_risk_country(df, cfg)
     df = detect_exchange_avoidance(df, cfg)
     df = detect_layering_deep(df, cfg)
+    df = detect_phish_hit(df, cfg)
+    df = detect_sub_threshold_tranching(df, cfg)
+    df = detect_machine_cadence(df, cfg)
+    df = detect_sybil_fan_in(df, cfg)
     df = score_transactions(df, cfg)
     df["risk_level"] = df["risk_score"].apply(risk_level)
 
