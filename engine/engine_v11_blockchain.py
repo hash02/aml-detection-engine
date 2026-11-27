@@ -242,7 +242,7 @@ CONFIG = {
         "KP", "IR", "MM", "SY", "YE", "SD", "LY", "IQ",  # FATF blacklist
         "AF", "AL", "BB", "BF", "CM", "HT", "JM", "JO",  # FATF grey list
         "ML", "MZ", "NG", "PA", "PH", "SN", "SS", "TZ",
-        "TN", "VN", "XX", "UNKNOWN"                        # Unknown = treat as high risk
+        "TN", "VN", "XX",  # XX is the mixer jurisdiction tag, not a missing country
     },
 
     # exchange_avoidance — known exchange address prefixes / labels
@@ -1814,6 +1814,18 @@ def detect_exchange_avoidance(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     return df
 
 
+def is_scored_foreign(country, home_country: str) -> bool:
+    """Whether a country code counts as foreign for scoring.
+
+    UNKNOWN is what the fetcher writes when it cannot infer a jurisdiction.
+    That is not evidence the transfer left the home country.
+    """
+    code = str(country).upper()
+    if code == "UNKNOWN":
+        return False
+    return code != str(home_country).upper()
+
+
 def score_row(row, cfg):
     pcfg    = PROFILE_CONFIG.get(row["sender_profile"], PROFILE_CONFIG[DEFAULT_PROFILE])
     score   = 0.0
@@ -1832,7 +1844,7 @@ def score_row(row, cfg):
     if row["fan_in_count"] >= cfg["fan_in_threshold"]:
         score += cfg["w_fan_in"]; reasons += "fan_in;"
 
-    is_foreign = str(row["country"]).upper() != cfg["home_country"].upper()
+    is_foreign = is_scored_foreign(row["country"], cfg["home_country"])
     other_hit  = (
         row["amount"]                   >= pcfg["large_amount_threshold"] or
         row["tx_count_in_window"]       >= pcfg["velocity_tx_count_threshold"] or
