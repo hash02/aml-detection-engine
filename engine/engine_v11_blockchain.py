@@ -242,7 +242,7 @@ CONFIG = {
         "KP", "IR", "MM", "SY", "YE", "SD", "LY", "IQ",  # FATF blacklist
         "AF", "AL", "BB", "BF", "CM", "HT", "JM", "JO",  # FATF grey list
         "ML", "MZ", "NG", "PA", "PH", "SN", "SS", "TZ",
-        "TN", "VN", "XX",  # XX is the mixer jurisdiction tag, not a missing country
+        "TN", "VN", "XX",  # XX stays listed. Fetchers tag known mixers MX_DARK, which is not in this set.
     },
 
     # exchange_avoidance — known exchange address prefixes / labels

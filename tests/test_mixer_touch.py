@@ -139,3 +139,65 @@ def test_nan_country_with_false_flag_is_not_a_mixer_row(row, t0, build_df):
     df.loc[0, "is_known_mixer"] = float("nan")
     out = _flags(df)
     assert bool(out.loc[0, "mixer_flag"]) is False
+
+
+def test_infer_country_known_mixer_is_mx_dark():
+    """Both fetchers share etherscan_fetcher.infer_country. Blockscout has no copy."""
+    import etherscan_fetcher
+    from etherscan_fetcher import KNOWN_BRIDGES, KNOWN_MIXERS, infer_country
+    from scripts.blockscout_fetcher import infer_country as blockscout_infer
+
+    assert blockscout_infer is etherscan_fetcher.infer_country
+    assert MIXER in KNOWN_MIXERS
+    assert infer_country(MIXER) == "MX_DARK"
+    assert infer_country(MIXER.upper()) == "MX_DARK"
+    for addr in KNOWN_MIXERS:
+        assert infer_country(addr) == "MX_DARK"
+    assert infer_country("0x" + "ab" * 20) == "UNKNOWN"
+    bridge = "0x3666f603cc164936c1b87e207f36beba4ac5f18d"
+    assert bridge in KNOWN_BRIDGES
+    assert infer_country(bridge) == "BRIDGE"
+
+
+def test_fetched_mixer_sender_and_receiver_scores(row, t0, build_df):
+    """Country comes from infer_country(sender). Withdraw overwrites the row.
+
+    A later payment to that receiver is mixer_withdraw as well.
+    $2,500 stays under the personal large-amount line, so the only points
+    are 55 * 1.3, rounded to 72. MX_DARK is foreign context only (0 points)
+    and is not in high_risk_countries.
+    """
+    from etherscan_fetcher import classify_profile, infer_country
+    from scripts.monitor import run_engine_on_df
+
+    country = infer_country(MIXER)
+    assert country == "MX_DARK"
+    df = build_df([
+        row(
+            MIXER, ALICE, 2_500, t0,
+            country=country,
+            is_known_mixer=True,
+            profile=classify_profile(MIXER, False),
+        ),
+        row(
+            DAVE, ALICE, 2_500, t0 + timedelta(minutes=30),
+            country="US",
+            profile="PERSONAL_LIKE",
+        ),
+    ])
+    out = run_engine_on_df(df, threshold=0.4)
+
+    sender = out.loc[0]
+    assert sender["mixer_type"] == "mixer_withdraw"
+    assert bool(sender["high_risk_country_flag"]) is False
+    assert bool(sender["ofac_flag"]) is False
+    assert int(sender["risk_score"]) == 72
+    assert sender["risk_level"] == "HIGH"
+    assert "foreign_context_only" in sender["reasons"]
+    assert "high_risk_jurisdiction" not in sender["reasons"]
+
+    receiver_row = out.loc[1]
+    assert receiver_row["mixer_type"] == "mixer_withdraw"
+    assert int(receiver_row["risk_score"]) == 72
+    assert receiver_row["risk_level"] == "HIGH"
+    assert "high_risk_jurisdiction" not in receiver_row["reasons"]
