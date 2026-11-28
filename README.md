@@ -318,7 +318,7 @@ Built by **Bionic Banker** — a financial services professional working at the 
 
 - **Data:** development data mixes real Etherscan rows and synthetic forensic reconstructions. The `label` column (`SYNTH_FORENSIC`, `REAL_DATA`) records provenance, not ground-truth risk.
 - **No validated accuracy:** no labeled benign/suspicious holdout is published yet (see [Evaluation status](#evaluation-status)).
-- **Country field:** `home_country` is `CA`. A known country code other than `CA` counts as foreign. On its own this adds a context reason and zero points. `UNKNOWN`, which `infer_country` writes when it cannot place an address, does not count as foreign and is not on the high-risk list. `XX` stays on that list as the mixer tag. Details: `docs/monitor-fixes-2026-11.md`.
+- **Country field:** `home_country` is `CA`. A known country code other than `CA` counts as foreign. On its own this adds a context reason and zero points. `UNKNOWN`, which `infer_country` writes when it cannot place an address, does not count as foreign and is not on the high-risk list (`docs/monitor-fixes-2026-11.md`). `XX` remains on the high-risk list. Known mixer addresses are tagged `MX_DARK`, and `MX_DARK` is not on that list. Details: `docs/mixer-touch-fix-2026-11.md`.
 - **Threat feeds:** the scheduled refresh is currently failing; the committed snapshot is dated 2026-04-23.
 - **Scope:** triage and education only. It does not accuse, file, freeze, or replace compliance judgment.
 

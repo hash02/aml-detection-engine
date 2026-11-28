@@ -302,7 +302,9 @@ def classify_profile(address: str, is_contract: bool) -> str:
 def infer_country(address: str) -> str:
     addr_lower = address.lower()
     if addr_lower in KNOWN_MIXERS:
-        return "XX"        # Unknown/high-risk — engine treats XX as suspicious
+        # Engine mixer rows are country MX_DARK (MIXER_COUNTRY_CODES).
+        # XX remains on the high-risk list and is not this tag.
+        return "MX_DARK"
     if addr_lower in KNOWN_BRIDGES:
         return "BRIDGE"    # Not a real country but engine won't penalize
     if addr_lower in KNOWN_EXCHANGES:

@@ -227,18 +227,39 @@ precision across many transactions; bots / scheduled jobs do.
 ### `detect_mixer_touch` — Mixer Touch
 
 ```text
-A wallet is mixer-contaminated if:
-  - It sent to a mixer country code (deposit), OR
-  - It received from a mixer country code (withdrawal)
-within the mixer_window_hours lookback.
+Flag mixer placement and mixer exit separately.
 
-We build a set of contaminated sender_ids and receiver_ids,
-then flag every row where those wallets appear.
+A known mixer address comes from the mixers feed, unioned with
+etherscan_fetcher.KNOWN_MIXERS. Direction for each row:
 
-Score logic:
-  - Deposited INTO mixer  → mixer_deposit  (HIGH)
-  - Received FROM mixer   → mixer_withdraw (CRITICAL — clean money exits here)
-  - Transacted WITH a contaminated wallet → mixer_adjacent (MEDIUM)
+  1. Receiver address is a known mixer → mixer_deposit (placement,
+     sending into the mixer). The sender is a depositor when that
+     sender is not itself a mixer address.
+  2. Sender address is a known mixer → mixer_withdraw (layering
+     exit, receiving from the mixer). The receiver is a withdrawal
+     recipient when that receiver is not itself a mixer address.
+  3. Country is MX_DARK and the receiver is not a known mixer.
+     Country is inferred from the sender, so the sender is treated
+     as the mixer. Label mixer_withdraw. That sender is not stored
+     as a customer wallet.
+  4. is_known_mixer is truthy, neither address is a known mixer,
+     and country is not MX_DARK. Label mixer_deposit. No customer
+     wallet is stored, because the side is unknown.
+
+When both addresses are known mixers the row is mixer_withdraw
+(funds left a mixer) and neither address is stored as a customer.
+
+Later sends by a depositor are mixer_deposit. Later receipts by a
+withdrawal recipient are mixer_withdraw. If a non-direct row is
+both, the withdrawal label wins. A direct send into a mixer stays
+mixer_deposit. Mixer addresses are never depositor or
+withdrawal-recipient wallets.
+
+Score: mixer_deposit adds w_mixer_touch (55). mixer_withdraw adds
+w_mixer_touch * 1.3. The two amounts stay separate.
+
+cfg["mixer_window_hours"] is read and not applied. Row age does
+not filter these flags.
 ```
 
 ### `detect_novel_wallet_dump` — Novel Wallet Dump

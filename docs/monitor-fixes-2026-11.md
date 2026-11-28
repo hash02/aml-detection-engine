@@ -45,7 +45,9 @@ A normal fetched transfer therefore received high-risk points, and a large one a
 
 The change is limited to that default. `UNKNOWN` is removed from `high_risk_countries`. `is_scored_foreign` returns false for `UNKNOWN`, and both `score_row` and `engine/explain.py` use it, so the score and the point breakdown stay aligned. `infer_country` still writes `UNKNOWN`. The label means the jurisdiction is not known. It is no longer a risk signal.
 
-`XX` stays on the high-risk list. `infer_country` returns `XX` for known mixers so the engine treats that tag as suspicious. Known country codes other than `CA`, including FATF codes such as `KP`, are unchanged.
+`XX` stays on the high-risk list. At the time of this note, `infer_country` returned `XX` for known mixers so the engine treated that tag as suspicious. Known country codes other than `CA`, including FATF codes such as `KP`, are unchanged.
+
+A later change moves the mixer tag. `infer_country` now returns `MX_DARK` for known mixers, and `detect_mixer_touch` also reads `is_known_mixer`. `XX` is still in `high_risk_countries`. `MX_DARK` was not added to that set. Details: `docs/mixer-touch-fix-2026-11.md`.
 
 ### Point breakdown, before and after
 
