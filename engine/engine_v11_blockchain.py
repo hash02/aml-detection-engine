@@ -6,9 +6,9 @@ The blockchain boss fight.
 v7 inherits ALL v6 rules and adds 3 blockchain-native abilities:
 
   🆕 ABILITY 7 — mixer_touch
-     Fires when a row is a known mixer contact (country MX_DARK, or
-     is_known_mixer set). Wallet that sent on that row = HIGH.
-     Wallet that received on that row = CRITICAL.
+     Fires on a known mixer contact.
+     Sending into a mixer = mixer_deposit (placement).
+     Receiving from a mixer = mixer_withdraw (layering exit).
      (Equivalent: nothing in v6 banking. This is a new weapon.)
 
   🆕 ABILITY 8 — bridge_hop
@@ -562,56 +562,121 @@ def _is_known_mixer_mask(df: pd.DataFrame) -> pd.Series:
     return pd.Series([_one(v) for v in series.tolist()], index=series.index, dtype=bool)
 
 
+def _normalize_addr(value) -> str:
+    if value is None or value is pd.NA:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        return ""
+    return str(value).strip().lower()
+
+
+def _mixer_address_set() -> set[str]:
+    """Lowercased mixer contract addresses used to decide direction.
+
+    Primary source is the engine mixers feed (get_feed("mixers")).
+    etherscan_fetcher.KNOWN_MIXERS is unioned when that module imports.
+    Those two sets are the same roster; the union covers a feed miss.
+    """
+    found: set[str] = set()
+    if FEEDS_AVAILABLE:
+        try:
+            found.update(_normalize_addr(a) for a in get_feed("mixers"))
+        except (KeyError, TypeError, ValueError):
+            pass
+    try:
+        from etherscan_fetcher import KNOWN_MIXERS
+        found.update(_normalize_addr(a) for a in KNOWN_MIXERS)
+    except ImportError:
+        pass
+    found.discard("")
+    return found
+
+
 def detect_mixer_touch(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     """
-    A wallet is mixer-contaminated if it shows up on a mixer row.
+    Flag mixer placement and mixer exit separately.
 
-    A mixer row has country in MIXER_COUNTRY_CODES (MX_DARK), or a
-    truthy is_known_mixer flag. Missing column, NaN, and false-like
-    strings are not mixer rows.
+    A known mixer address comes from the mixers feed, unioned with
+    etherscan_fetcher.KNOWN_MIXERS. Direction for each row:
 
-    Senders of mixer rows are depositors. Receivers are withdrawers.
-    A depositor's later sends are mixer_deposit. A withdrawer's later
-    receives are mixer_withdraw, and withdraw overwrites deposit.
+      1. Receiver address is a known mixer → mixer_deposit (placement,
+         sending into the mixer). The sender is a depositor when that
+         sender is not itself a mixer address.
+      2. Sender address is a known mixer → mixer_withdraw (layering
+         exit, receiving from the mixer). The receiver is a withdrawal
+         recipient when that receiver is not itself a mixer address.
+      3. Country is MX_DARK and the receiver is not a known mixer.
+         Country is inferred from the sender, so the sender is treated
+         as the mixer. Label mixer_withdraw. That sender is not stored
+         as a customer wallet.
+      4. is_known_mixer is truthy, neither address is a known mixer,
+         and country is not MX_DARK. Label mixer_deposit. No customer
+         wallet is stored, because the side is unknown.
 
-    Score logic:
-      - Deposited INTO mixer  → mixer_deposit  (HIGH)
-      - Received FROM mixer   → mixer_withdraw (CRITICAL — clean money exits here)
+    When both addresses are known mixers the row is mixer_withdraw
+    (funds left a mixer) and neither address is stored as a customer.
+
+    Later sends by a depositor are mixer_deposit. Later receipts by a
+    withdrawal recipient are mixer_withdraw. If a non-direct row is
+    both, the withdrawal label wins. A direct send into a mixer stays
+    mixer_deposit. Mixer addresses are never depositor or
+    withdrawal-recipient wallets.
+
+    Score: mixer_deposit adds w_mixer_touch (55). mixer_withdraw adds
+    w_mixer_touch * 1.3. The two amounts stay separate.
 
     cfg["mixer_window_hours"] is read and not applied. Row age does
     not filter these flags.
     """
     df = df.copy()
-    df["mixer_flag"]   = False
-    df["mixer_type"]   = ""
+    df["mixer_flag"] = False
+    df["mixer_type"] = ""
     # Lookback is configured and intentionally unused. See the docstring.
     window = timedelta(hours=cfg["mixer_window_hours"])
 
-    # Mixer rows: country == MX_DARK, or the fetcher's is_known_mixer flag.
-    known_mixer = _is_known_mixer_mask(df)
-    mixer_rows = df[df["country"].isin(MIXER_COUNTRY_CODES) | known_mixer]
+    mixer_addrs = _mixer_address_set()
+    sender_l = df["sender_id"].map(_normalize_addr) if "sender_id" in df.columns else pd.Series("", index=df.index)
+    receiver_l = df["receiver_id"].map(_normalize_addr) if "receiver_id" in df.columns else pd.Series("", index=df.index)
+    sender_is_mx = sender_l.isin(mixer_addrs) & sender_l.ne("")
+    receiver_is_mx = receiver_l.isin(mixer_addrs) & receiver_l.ne("")
+    if "country" in df.columns:
+        country_says_sender = df["country"].isin(MIXER_COUNTRY_CODES)
+    else:
+        country_says_sender = pd.Series(False, index=df.index)
+    known_flag = _is_known_mixer_mask(df)
 
-    depositors   = set(mixer_rows["sender_id"].tolist())    # senders on mixer rows
-    withdrawers  = set(mixer_rows["receiver_id"].tolist())  # receivers on mixer rows
+    # Placement: funds move into a mixer contract.
+    into_mixer = receiver_is_mx
+    # Exit: funds move out of a mixer. MX_DARK means the sender is the
+    # mixer, except when the receiver address is the mixer (placement wins).
+    from_mixer = sender_is_mx | (country_says_sender & ~receiver_is_mx)
+    flag_only = known_flag & ~sender_is_mx & ~receiver_is_mx & ~country_says_sender
 
-    print(f"[MIXER] Direct contacts — depositors: {len(depositors)} | withdrawers: {len(withdrawers)}")
+    df.loc[flag_only, "mixer_type"] = "mixer_deposit"
+    df.loc[into_mixer, "mixer_type"] = "mixer_deposit"
+    df.loc[from_mixer, "mixer_type"] = "mixer_withdraw"
 
-    # Flag deposits. Country and is_known_mixer mark the mixer row itself
-    # even when sender_id is missing (isin drops NaN).
-    dep_mask = (
-        df["sender_id"].isin(depositors)
-        | df["country"].isin(MIXER_COUNTRY_CODES)
-        | known_mixer
-    )
-    df.loc[dep_mask, "mixer_flag"] = True
-    df.loc[dep_mask & (df["mixer_type"] == ""), "mixer_type"] = "mixer_deposit"
+    blocked = set(mixer_addrs)
+    blocked.update(sender_l[from_mixer & ~into_mixer & sender_l.ne("")].tolist())
+    blocked.discard("")
 
-    # Flag withdrawals (higher severity)
-    with_mask = df["receiver_id"].isin(withdrawers)
-    df.loc[with_mask, "mixer_flag"] = True
-    df.loc[with_mask, "mixer_type"] = "mixer_withdraw"  # overwrite — more severe
+    depositors = set(sender_l[into_mixer & ~sender_is_mx & sender_l.ne("")].tolist()) - blocked
+    recipients = set(receiver_l[from_mixer & ~receiver_is_mx & receiver_l.ne("")].tolist()) - blocked
 
-    flagged = df["mixer_flag"].sum()
+    print(f"[MIXER] Direct contacts — depositors: {len(depositors)} | withdrawal recipients: {len(recipients)}")
+
+    # Contamination applies only where this row is not itself a direct
+    # mixer contact. Withdrawal still wins when a row is both a
+    # depositor's later send and a payment to a withdrawal recipient.
+    direct = df["mixer_type"].ne("")
+    df.loc[~direct & sender_l.isin(depositors), "mixer_type"] = "mixer_deposit"
+    df.loc[~direct & receiver_l.isin(recipients), "mixer_type"] = "mixer_withdraw"
+
+    df["mixer_flag"] = df["mixer_type"].ne("")
+    flagged = int(df["mixer_flag"].sum())
     print(f"[MIXER] Total mixer-flagged transactions: {flagged}")
     return df
 

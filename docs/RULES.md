@@ -227,19 +227,36 @@ precision across many transactions; bots / scheduled jobs do.
 ### `detect_mixer_touch` — Mixer Touch
 
 ```text
-A wallet is mixer-contaminated if it shows up on a mixer row.
+Flag mixer placement and mixer exit separately.
 
-A mixer row has country in MIXER_COUNTRY_CODES (MX_DARK), or a
-truthy is_known_mixer flag. Missing column, NaN, and false-like
-strings are not mixer rows.
+A known mixer address comes from the mixers feed, unioned with
+etherscan_fetcher.KNOWN_MIXERS. Direction for each row:
 
-Senders of mixer rows are depositors. Receivers are withdrawers.
-A depositor's later sends are mixer_deposit. A withdrawer's later
-receives are mixer_withdraw, and withdraw overwrites deposit.
+  1. Receiver address is a known mixer → mixer_deposit (placement,
+     sending into the mixer). The sender is a depositor when that
+     sender is not itself a mixer address.
+  2. Sender address is a known mixer → mixer_withdraw (layering
+     exit, receiving from the mixer). The receiver is a withdrawal
+     recipient when that receiver is not itself a mixer address.
+  3. Country is MX_DARK and the receiver is not a known mixer.
+     Country is inferred from the sender, so the sender is treated
+     as the mixer. Label mixer_withdraw. That sender is not stored
+     as a customer wallet.
+  4. is_known_mixer is truthy, neither address is a known mixer,
+     and country is not MX_DARK. Label mixer_deposit. No customer
+     wallet is stored, because the side is unknown.
 
-Score logic:
-  - Deposited INTO mixer  → mixer_deposit  (HIGH)
-  - Received FROM mixer   → mixer_withdraw (CRITICAL — clean money exits here)
+When both addresses are known mixers the row is mixer_withdraw
+(funds left a mixer) and neither address is stored as a customer.
+
+Later sends by a depositor are mixer_deposit. Later receipts by a
+withdrawal recipient are mixer_withdraw. If a non-direct row is
+both, the withdrawal label wins. A direct send into a mixer stays
+mixer_deposit. Mixer addresses are never depositor or
+withdrawal-recipient wallets.
+
+Score: mixer_deposit adds w_mixer_touch (55). mixer_withdraw adds
+w_mixer_touch * 1.3. The two amounts stay separate.
 
 cfg["mixer_window_hours"] is read and not applied. Row age does
 not filter these flags.
